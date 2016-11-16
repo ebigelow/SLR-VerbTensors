@@ -1,21 +1,11 @@
 import numpy as np
 import gensim.models as gm
 import pandas as pd
+import itertools
 from collections import defaultdict
-from scipy.spatial.distance import cosine
+# from scipy.spatial.distance import cosine
 from tqdm import tqdm, trange
 
-
-
-
-# np.einsum('ijk,jil->kl', a, b)
-# np.einsum('...j,j', a, b)
-# np.einsum('i...->...', a)
-
-
-
-
-# rho, pvalue = scipy.stats.spearmanr(GT, predictions)
 
 
 class Verb:
@@ -47,7 +37,7 @@ class Verb:
         batches = Mv / batch_size
 
         for e in trange(epochs):
-            for i in trange(batches):
+            for i in range(batches):
 
                 P,Q,R = (self.P, self.Q, self.R)
                 t = sentences[i : i + batch_size].T
@@ -57,8 +47,6 @@ class Verb:
                 Qs = Q.dot(s)
                 Ro = R.dot(o)
                 Qs_Ro = Qs * Ro
-
-                # import ipdb; ipdb.set_trace()
 
                 if e % 3 == 0:
                     dL_dP = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
@@ -103,56 +91,71 @@ if __name__ == '__main__':
     ks_data = pd.read_csv('data/eval/KS2014.txt',     delimiter=' ')
 
     # Collect sets of unique triplets and pairs (verb-subject, verb-object)
-    gs_SVO = zip(gs_data['verb'].tolist(), gs_data['landmark'].tolist()
+    print 'collecting triplets . . .'
+    gs_SVO = zip(gs_data['verb'].tolist(), gs_data['landmark'].tolist(),
                  gs_data['subject'].tolist(), gs_data['object'].tolist())
     V_SO = defaultdict(lambda: set())
     V_S  = defaultdict(lambda: set())
     V_O  = defaultdict(lambda: set())
 
     for v,t,s,o in gs_SVO:
-        V_SO[v].update((s, o))
-        V_SO[m].update((s, o))  # TODO: should this be (s,o) -- are we fitting test data in this way?
-        V_S[v].update(s)
-        V_O[v].update(o)
+        V_SO[v].update({(s, o)})
+        V_SO[t].update({(s, o)})  # TODO: should this be (s,o) -- are we fitting test data in this way?
+        V_S[v].update({s})
+        V_O[v].update({o})
 
     # Genetrate some extra datas
     gs_nouns = set(gs_data['subject'].tolist() + gs_data['object'].tolist())
-    noun_prods = itertools.product(gs_nouns)
+    noun_prods = [i for i in itertools.product(gs_nouns, gs_nouns)]
 
     # Number of unique triplets for each verb  (250 given for GS)
     n_trips = 500
 
     # Sample random triplets so we have `n_trips` for each verb
-    for v in V_SO:
+    for v in tqdm(V_SO):
         n_cur = len(V_SO[v])
         n_samples = n_trips - n_cur
 
         candidates = [(s,o) for s,o in noun_prods if (s,o) not in V_SO[v]]
-        samples = np.random.choice(candidates, n_samples, replace=False)
-
-        V_SO.union_update(set(samples))
+        sample_idxs = np.random.choice(range(len(candidates)), n_samples, replace=False)
+        samples = [candidates[i] for i in sample_idxs]
+        V_SO[v].update(set(samples))
 
     # Setup dictionaries mapping triplets to vectors
+    print 'building faux vectors . . .'
     d2v = gm.Doc2Vec.load('data/doc2vec_wiki/doc2vec.bin')
     w2v = gm.Word2Vec.load('data/word2vec_wiki/word2vec.bin')
 
     faux_data = defaultdict(lambda: list())
-    for v in V_SO:
+    for v in tqdm(V_SO):
         for s,o in V_SO[v]:
-            svo_vec = d2v[(s,v,o)]
+            svo_vec = d2v[(s,v,o)].sum(axis=0)         # TODO is this right . . ?
             s_vec = w2v[s]
             o_vec = w2v[o]
             faux_data[v].append((svo_vec, s_vec, o_vec))
         faux_data[v] = [np.vstack(x) for x in zip(*faux_data[v])]   # stack vectors into matrices
 
+    # Save Gensim data to numpy dict
+    faux_ = {v:faux_data[v] for v in faux_data}
+    np.save(faux_, 'data/faux_vectors.npy')
+    V_SO_ = {v:V_SO[v] for v in V_SO}
+    np.save(V_SO_, 'data/faux_triplets.npy')
+
+    # faux_data = np.load('data/faux_vectors.npy').item()
+    # V_SO = np.load('data/faux_triplets.npy').item()
+
+
     # Parameters
     rank = 50
-    svec = svo_vec.shape[1]
-    nvec = s_vec.shape[1]
+    svec = len(svo_vec)
+    nvec = len(s_vec)
 
     # Build and train model for each verb
     verbs = {}
-    for v in V_SO:
+    tq = tqdm(V_SO, desc='\nbegin training . . .\n\n', leave=True)
+
+    for v in tq:
+        tq.set_description('Training: "' + v + '"')
         verbs[v] = Verb(rank=rank, svec=svec, nvec=nvec, init_noise=0.1)
         verbs[v].SGD_cp(*faux_data[v])
 
@@ -165,8 +168,7 @@ if __name__ == '__main__':
         verb_vec = verbs[v].V(s,o)
         test_vec = verbs[t].V(s,o)
 
-        # TODO: Test different distances
-        predict = cosine(verb_vec)
+        predict = cosine(verb_vec)     # TODO: test different distances
         test_pairs.append((predict, score))
 
     # Compute spearman R for full data

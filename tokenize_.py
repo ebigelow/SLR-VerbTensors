@@ -2,7 +2,7 @@
 
 
 import nltk
-wnl = nltk.stem.WordNetLemmatizer()
+# wnl = nltk.stem.WordNetLemmatizer()
 
 
 
