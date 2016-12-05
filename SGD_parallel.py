@@ -20,20 +20,20 @@ def train_trials_grid(params, grid_params, parallel=False, verbose=False):
         best_acc_gs = 0.0
         best_acc_ks = 0.0
 
-        loop2 = trange(params['n_trials']) if verbose else range(params['n_trials'])
+        loop2 = trange if verbose else range
 
-        for k in loop2:
+        for k in loop2(params['n_trials']):
             P = test_to_params(params_iter)
 
             # verbs = train_verbs(P)
             verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
-            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
+            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=False)[0]
             if curr_acc_gs > best_acc_gs:
                 save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
                 best_acc_gs = curr_acc_gs
 
-            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS')[0]
+            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=False)[0]
             if curr_acc_ks > best_acc_ks:
                 save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
                 best_acc_gs = curr_acc_ks
@@ -42,7 +42,7 @@ def train_trials_grid(params, grid_params, parallel=False, verbose=False):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        print '~~~~~ Grid iteration: {}   best GS: {}   best KS: {}'.format(i, best_acc_gs, best_acc_ks)
+        #print '~~~~~ Grid iteration: {}   best GS: {}   best KS: {}'.format(i, best_acc_gs, best_acc_ks)
 
 
 
