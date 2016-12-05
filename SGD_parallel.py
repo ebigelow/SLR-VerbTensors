@@ -42,7 +42,7 @@ def train_trials_grid(params, grid_params, parallel=False, verbose=False):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        print '~~~~~ Grid iteration: {}'.format(i)
+        print '~~~~~ Grid iteration: {}   best GS: {}   best KS: {}'.format(i, best_acc_gs, best_acc_ks)
 
 
 
