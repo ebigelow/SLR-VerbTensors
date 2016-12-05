@@ -6,11 +6,11 @@ from verb import Verb, load_verbs, save_verbs
 from tqdm import tqdm, trange
 
 
-def test_verbs(verbs, w2v_nn, test_data, dset='GS', verbal=False):
+def test_verbs(verbs, w2v_nn, test_data, dset='GS', verbose=False):
 
     # Predict similarity for GS test data, using learned verb representations
     test_pairs = []
-    if verbal: print '\n\nTesting on '+dset+' data . . .'
+    if verbose: print '\n\nTesting on '+dset+' data . . .'
 
     for row in test_data.iterrows():
 
@@ -31,7 +31,7 @@ def test_verbs(verbs, w2v_nn, test_data, dset='GS', verbal=False):
 
     # Compute spearman R for full data
     rho_, pvalue = spearmanr(*zip(*test_pairs))
-    if verbal: print '\trho: {}\n\tpvalue: {}'.format(rho_, pvalue)
+    if verbose: print '\trho: {}\n\tpvalue: {}'.format(rho_, pvalue)
     return rho_, pvalue 
 
 
@@ -72,7 +72,9 @@ def train_trials(params, parallel=False, verbose=False):
     best_acc_gs = 0.0
     best_acc_ks = 0.0
 
-    for k in trange(params['n_trials']):
+    loop = trange if verbose else range
+    
+    for k in loop(params['n_trials']):
         P = test_to_params(params)
 
         # Train verbs
@@ -80,12 +82,12 @@ def train_trials(params, parallel=False, verbose=False):
         verbs = train_verbs(P, verbose=verbose)
 
         # Update saved weights for best-scoring parameters
-        curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbal=True)[0]
+        curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=False)[0]
         if curr_acc_gs > best_acc_gs:
             save_verbs(verbs, P['save_file'] + '-GS.npy')
             best_acc_gs = curr_acc_gs
 
-        curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbal=True)[0]
+        curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=False)[0]
         if curr_acc_ks > best_acc_ks:
             save_verbs(verbs, P['save_file'] + '-KS.npy')
             best_acc_ks = curr_acc_ks
