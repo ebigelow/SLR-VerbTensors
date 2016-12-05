@@ -7,21 +7,26 @@ from verb import *
 from pyina.ez_map import ez_map
 
 
-def train_trials_grid(params, grid_params, parallel=False):
+def train_trials_grid(params, grid_params, parallel=False, verbose=False):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
-    for i, grid_iter in tqdm(enumerate(itertools.product(*it_params))):
+    iter_ = enumerate(itertools.product(*it_params))
+    loop1 = tqdm(iter_) if verbose else iter_
+
+    for i, grid_iter in loop1:
         params_iter = dict(params.items() + list(grid_iter))
 
         best_acc_gs = 0.0
         best_acc_ks = 0.0
 
-        for k in trange(params['n_trials']):
+        loop2 = trange(params['n_trials']) if verbose else range(params['n_trials'])
+
+        for k in loop2:
             P = test_to_params(params_iter)
 
             # verbs = train_verbs(P)
-            verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
+            verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose)
 
             curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
             if curr_acc_gs > best_acc_gs:
@@ -37,6 +42,7 @@ def train_trials_grid(params, grid_params, parallel=False):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
+        print '~~~~~ Grid iteration: {}'.format(i)
 
 
 

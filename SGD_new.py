@@ -35,13 +35,15 @@ def test_verbs(verbs, w2v_nn, test_data, dset='GS', verbal=False):
     return rho_, pvalue 
 
 
-def train_verbs(params):
+def train_verbs(params, verbose=False):
     # Build and train model for each verb
     verbs = {}
 
-    tq = tqdm(params['w2v_svo'].items(), desc='', leave=True)
+    it = params['w2v_svo'].items()
+    loop = tqdm(it, desc='', leave=True) if verbose else it
+
     for v, s_o in tq:  
-        tq.set_description('Training: "' + v + '"')
+        if verbose:  tq.set_description('Training: "' + v + '"')
 
         P = params.copy()
         P['test_data'] = params['test_data'][v]
@@ -62,7 +64,7 @@ def train_verbs(params):
 
 
 
-def train_trials(params, parallel=False):
+def train_trials(params, parallel=False, verbose=False):
     """
     Train all verbs `n_trials` individual times.
 
@@ -74,8 +76,9 @@ def train_trials(params, parallel=False):
         P = test_to_params(params)
 
         # Train verbs
-        #verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
-        verbs = train_verbs(P)
+        #verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose=verbose)
+        verbs = train_verbs(P, verbose=verbose)
+        
         # Update saved weights for best-scoring parameters
         curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbal=True)[0]
         if curr_acc_gs > best_acc_gs:
