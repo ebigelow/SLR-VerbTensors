@@ -376,7 +376,7 @@ if __name__ == '__main__':
     rho           = 0.9
     eps           = 1e-6
 
-    cg            = 0   # set to 0 for full data
+    cg            = 0      # set to 0 for full data
     ck            = -1     # set to -1 for full data  (minus 1 point)
 
     n_stop        = 0.1
