@@ -74,9 +74,7 @@ def train_trials(params, parallel=False):
         P = test_to_params(params)
 
         # Train verbs
-        #train = train_verbs_parallel if parallel else train_verbs    # TODO
-        train = train_verbs_parallel
-        verbs = train(P)
+        verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
         # Update saved weights for best-scoring parameters
         curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbal=True)[0]
