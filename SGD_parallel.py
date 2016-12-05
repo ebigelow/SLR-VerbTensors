@@ -1,9 +1,10 @@
 import itertools
-from pyina.ez_map import ez_map
 
 from utils import *
 from SGD_new import *
 from verb import *
+
+from pyina.ez_map import ez_map
 
 
 def train_trials_grid(params, grid_params, parallel=False):
@@ -20,8 +21,7 @@ def train_trials_grid(params, grid_params, parallel=False):
             P = test_to_params(params_iter)
 
             # verbs = train_verbs(P)
-            train = train_verbs_parallel if parallel else train_verbs
-            verbs = train(P)
+            verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
             curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
             if curr_acc_gs > best_acc_gs:
@@ -71,8 +71,8 @@ def train_verbs_parallel(params):
         P['test_data'] = params['test_data'][v]
         map_inputs.append((v, s_o, P))
 
-    parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
-    # parfor = map(verb_parfun, map_inputs)
+    #parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
+    parfor = map(verb_parfun, map_inputs)
 
     verbs = {verb.v:verb for verb in parfor}
     return verbs
