@@ -26,7 +26,7 @@ def train_trials_grid(params, grid_params, parallel=False, verbose=False):
             P = test_to_params(params_iter)
 
             # verbs = train_verbs(P)
-            verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose)
+            verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
             curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
             if curr_acc_gs > best_acc_gs:
@@ -77,8 +77,8 @@ def train_verbs_parallel(params):
         P['test_data'] = params['test_data'][v]
         map_inputs.append((v, s_o, P))
 
-    #parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
-    parfor = map(verb_parfun, map_inputs)
+    parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
+    #parfor = map(verb_parfun, map_inputs)
 
     verbs = {verb.v:verb for verb in parfor}
     return verbs
@@ -107,11 +107,10 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-1/grid',
-        'grid_file'     : 'data/test-1/grid_accuracy.csv',
+        'save_file'     : 'data/test-2/grid',
+        'grid_file'     : 'data/test-2/grid_accuracy.csv',
         'verbose'       : False,
-        'train'         : True,
-        'rank'          : 5,
+        'rank'          : 15,
         'batch_size'    : 20,
         'epochs'        : 500,
         'n_trials'      : 1,        # TODO change back to higher number  (also cg, ck)
@@ -120,8 +119,8 @@ if __name__ == '__main__':
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.9,
         'eps'           : 1e-6,
-        'cg'            : 1,        # TODO set to 0 for full data,
-        'ck'            : 1,        # TODO set to -1 for full data  (minus 1 point),
+        'cg'            : 5,        # TODO set to 0 for full data,
+        'ck'            : 5,        # TODO set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
         'n_nodes'       : 4,
