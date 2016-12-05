@@ -109,6 +109,7 @@ if __name__ == '__main__':
     params = {   
         'save_file'     : 'data/test-1/grid',
         'grid_file'     : 'data/test-1/grid_accuracy.csv',
+        'verbose'       : False,
         'train'         : True,
         'rank'          : 5,
         'batch_size'    : 20,

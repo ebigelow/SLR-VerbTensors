@@ -78,7 +78,7 @@ def train_trials(params, parallel=False, verbose=False):
         # Train verbs
         #verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose=verbose)
         verbs = train_verbs(P, verbose=verbose)
-        
+
         # Update saved weights for best-scoring parameters
         curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbal=True)[0]
         if curr_acc_gs > best_acc_gs:
@@ -104,6 +104,7 @@ if __name__ == '__main__':
 
     params = {   
         'save_file'     : 'data/test-1',
+        'verbose'       : False,
         'train'         : True,
         'rank'          : 5,
         'batch_size'    : 20,

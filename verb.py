@@ -46,7 +46,7 @@ class Verb:
 
 
     def SGD(self, sentences, subjects, objects, 
-            epochs=100, batch_size=4, learning_rate=1.0):
+            epochs=100, batch_size=4, learning_rate=1.0, verbose=False):
         """
         Arguments
         ---------
@@ -64,7 +64,8 @@ class Verb:
         lr = learning_rate / Mv
         batches = Mv / batch_size
 
-        for e in trange(epochs):
+        loop = trange(epochs) if verbose else range(epochs)
+        for e in loop:
             for i in range(batches):
 
                 P,Q,R = (self.P, self.Q, self.R)
@@ -98,7 +99,7 @@ class Verb:
 
     def ADA_delta(self, sentences, subjects, objects, n_trials=10,
                   epochs=100, batch_size=100, learning_rate=1.0,
-                  rho=0.95, eps=1e-6):
+                  rho=0.95, eps=1e-6, verbose=False):
         """
         https://arxiv.org/pdf/1212.5701v1.pdf
 
@@ -141,9 +142,8 @@ class Verb:
         E_g2_prev  = [0.0, 0.0, 0.0]
         E_dx2_prev = [0.0, 0.0, 0.0]
 
-        # for tr in trange(n_trials):
-
-        for e in trange(epochs):
+        loop = trange(epochs) if verbose else range(epochs)
+        for e in loop:
 
             shuffled_batches = sorted(range(batches), key=lambda x: np.random.rand())
             for i in shuffled_batches:
