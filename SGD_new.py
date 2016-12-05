@@ -42,8 +42,8 @@ def train_verbs(params, verbose=False):
     it = params['w2v_svo'].items()
     loop = tqdm(it, desc='', leave=True) if verbose else it
 
-    for v, s_o in tq:  
-        if verbose:  tq.set_description('Training: "' + v + '"')
+    for v, s_o in loop:  
+        if verbose:  loop.set_description('Training: "' + v + '"')
 
         P = params.copy()
         P['test_data'] = params['test_data'][v]
