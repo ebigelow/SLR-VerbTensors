@@ -1,130 +1,81 @@
-from SGD_real import *
+import itertools
 from pyina.ez_map import ez_map
-# TODO: install dill, mpi4py, pyina
 
-IGNORE = ['w2v_nn', 'w2v_svo', 'w2v_svo_full', 'test_data', 'gs_data', 'ks_data']
-
-
-
-def parameterize(func, params_orig):
-    func_args = func.__code__.co_varnames
-
-    params = params_orig.copy()
-    for p in params:
-        if p not in func_args:
-            del params[p]
-
-    return func(**params)
+from utils import *
+from SGD_new import *
+from verb import *
 
 
-
-
-def test_to_params(params_orig):
-    params = params_orig.copy()
-    w2v_svo_full, n_stop = (params['w2v_svo_full'], params['n_stop'])
-    w2v_svo, w2v_svo_test = split_test(w2v_svo_full, n_stop=n_stop)
-    test_data = {k:format_data(w2v_nn, s_o) for k,s_o in w2v_svo_test.items()}
-
-    params['w2v_svo']   = w2v_svo
-    params['test_data'] = test_data
-    del params['w2v_svo_full']
-
-    return params
-
-
-
-
-def train_grid(params_orig, grid_params):
-
-    df = pd.DataFrame()
+def train_trials_grid(params, grid_params, parallel=False):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+    rows = []
 
-    for i, grid_iter in tqdm(list(itertools.product(*it_params))):
-        params_iter = dict(grid_iter + params_orig.items())
+    for i, grid_iter in tqdm(enumerate(itertools.product(*it_params))):
+        params_iter = dict(params.items() + list(grid_iter))
 
         best_acc_gs = 0.0
         best_acc_ks = 0.0
-        for k in trange(n_trials):
-            params = test_to_params(**params_iter)
 
-            verbs = []
-            verbs = parameterize(train_verbs, params)
+        for k in trange(params['n_trials']):
+            P = test_to_params(params_iter)
 
-            curr_acc_gs = test_verbs(verbs, params['w2v_nn'], params['gs_data'], dset='GS')[0]
+            # verbs = train_verbs(P)
+            train = train_verbs_parallel if parallel else train_verbs
+            verbs = train(P)
+
+            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
             if curr_acc_gs > best_acc_gs:
-                save_verbs(verbs, save_file + '-GS-{}.npy'.format(i))
-                # save_meta(save_file + '-GS-{}_meta.npy'.format(i))
+                save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
+                best_acc_gs = curr_acc_gs
 
-            curr_acc_ks = test_verbs(verbs, params['w2v_nn'], params['ks_data'], dset='KS')[0]
+            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS')[0]
             if curr_acc_ks > best_acc_ks:
-                save_verbs(verbs, save_file + '-KS-{}.npy'.format(i))
-                # save_meta(save_file + '-KS-{}_meta.npy'.format(i))
+                save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
+                best_acc_gs = curr_acc_ks
 
-        df.addrow(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
-                        ('id', i) ]  +  [(k,v) for k,v in params.items() if k not in IGNORE]  ))
-        pd.save_TODO(df, TODO_FILENAME)
-        # TODO: filename
-
-
-
-def train_standard(params):
-    best_acc_gs = 0.0
-    best_acc_ks = 0.0
-
-    for k in trange(n_trials):
-        P = test_to_params(params)
-
-        # Train verbs
-        verbs = parameterize(train_verbs, P)
-
-        # Update saved weights for best-scoring parameters
-        curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS')[0]
-        if curr_acc_gs > best_acc_gs:
-            save_verbs(verbs, save_file + '-GS.npy')
-
-        curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS')[0]
-        if curr_acc_ks > best_acc_ks:
-            save_verbs(verbs, save_file + '-KS.npy')
-
-    # Save metadata for this run
-    save_meta(params, save_file + '_meta.npy')
+        # Append row with metadata and accuracy
+        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
+                          ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
+        pd.DataFrame(rows).to_csv(params['grid_file'])
 
 
 
-def save_meta(params, fname):
-    d = {k:v for k,v in params.items() if k not in IGNORE}
-    np.save(fname, d)
+def verb_parfun(arguments):
+    """
+    Build and train model for each verb
 
+    """
+    v, s_o, params = arguments
 
-def verb_parfun(v, s_o, params):
-    """Build and train model for each verb"""
-    P = params
-    # P['test_data'] = test_data[v]
-    verb = parameterize(P, Verb)
+    P = params.copy()
+    verb = parameterize(Verb, P)
+
     P['sentences'],  P['subjects'], P['objects'] = format_data(w2v_nn, s_o)
-
-    if optimizer == 'SGD':
-        parameterize(P, verb.SGD)
-    elif optimizer == 'ADAD':
-        parameterize(P, verb.ADA_delta)
+    if P['optimizer'] == 'SGD':
+        parameterize(verb.SGD, P)
+    elif P['optimizer'] == 'ADAD':
+        parameterize(verb.ADA_delta, P)
 
     verb.v = v
     return verb
 
 
 def train_verbs_parallel(params):
-    # Split test data before, to minimize RAM overhead
+    """
+    Split test data before, to minimize RAM overhead
+
+    """
     map_inputs = []
-    for v, s_o in w2v_svo.items():
+    for v, s_o in params['w2v_svo'].items():
         P = params.copy()
-        P['test_data'] = test_data[v]
+        P['test_data'] = params['test_data'][v]
         map_inputs.append((v, s_o, P))
 
-    parfor = ez_map(verb_parfun, map_inputs, nnodes=n_nodes)
+    parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
+    # parfor = map(verb_parfun, map_inputs)
 
     verbs = {verb.v:verb for verb in parfor}
     return verbs
-
 
 
 
@@ -134,39 +85,40 @@ if __name__ == '__main__':
 
 
     # ------------------------------------------------------------------------
+    # Grid-search parameters
+
+    grid_params = {
+        'rank':     [20, 25], #[1, 5, 10, 20, 30, 40, 50, 100],    
+        'rho':      [0.85, 0.9, 0.95, 0.99],
+        # 'eps':      [1e-5, 1e-6, 1e-7],
+        # 'stop_t':   [0, 0.003, 0.01, 0.03],
+        # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
+    }
+
+
+
+    # ------------------------------------------------------------------------
     # Parameters
 
     params = {   
-        'save_file'     : 'data/grid1/run',
+        'save_file'     : 'data/test-1/grid',
+        'grid_file'     : 'data/test-1/grid_accuracy.csv',
         'train'         : True,
         'rank'          : 5,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 5,
+        'n_trials'      : 1,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
-        'optimizer'     : 'ADAD'  # | 'SGD',
+        'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.9,
         'eps'           : 1e-6,
-        'cg'            : 0,      # set to 0 for full data,
-        'ck'            : -1,     # set to -1 for full data  (minus 1 point),
+        'cg'            : 1,        # TODO set to 0 for full data,
+        'ck'            : 1,        # TODO set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
         'n_nodes'       : 4,
     }
-
-
-    # ------------------------------------------------------------------------
-    # Grid-search parameters
-
-    grid_params = {
-        'rank':     [1, 5, 10, 20, 30, 40, 50, 100],    
-        'rho':      [0.85, 0.9, 0.95, 0.99],
-        'eps':      [1e-5, 1e-6, 1e-7],
-        'stop_t':   [0, 0.003, 0.01, 0.03],
-        # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
-    }
-
 
 
 
@@ -175,7 +127,8 @@ if __name__ == '__main__':
 
     gs_file = 'data/eval/GS2011data.txt'
     ks_file = 'data/eval/KS2014.txt'
-    gs_data, ks_data, test_vs = load_test_data(cg, ck, gs_file=gs_file, ks_file=ks_file)
+    gs_data, ks_data, test_vs = load_test_data(params['cg'], params['ck'], 
+                                               gs_file=gs_file, ks_file=ks_file)
 
     # ------------------------------------------------------------------------
     # Load & filter word/triplet vectors
@@ -184,26 +137,26 @@ if __name__ == '__main__':
     svo_file = 'data/w2v/w2v-svo-triplets.npy'
     w2v_nn, w2v_svo_full = load_word2vec(test_vs, nn_file=nn_file, svo_file=svo_file)
 
-    params += {
+    params.update({
         'w2v_nn':        w2v_nn,
         'w2v_svo_full':  w2v_svo_full,
-        'test_data':     test_data,     # 10% triplets used for early stopping
         'gs_data':       gs_data,
         'ks_data':       ks_data,
-    }
+    })
 
     # ------------------------------------------------------------------------
     # Train / load verb parameters
 
-    if train:
-        TODO
+    train_trials(params, parallel=True)
+    train_trials_grid(params, grid_params, parallel=True)
+
+    # verbs = load_verbs(params['save_file'] + '.npy')
+    # test_verbs(verbs, w2v_nn, gs_data, dset='GS', verbal=True)
+    # test_verbs(verbs, w2v_nn, ks_data, dset='KS', verbal=True)
 
 
-    else:
-        verbs = load_verbs(save_file + '.npy')
 
-    test_verbs(verbs, w2v_nn, gs_data, dset='GS', verbal=True)
-    test_verbs(verbs, w2v_nn, ks_data, dset='KS', verbal=True)
+
 
 
 
