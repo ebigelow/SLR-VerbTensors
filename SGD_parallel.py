@@ -5,6 +5,7 @@ from SGD_new import *
 from verb import *
 
 from pyina.ez_map import ez_map
+from pyina.parallel_map2 import parallel_map
 
 
 def train_trials_grid(params, grid_params, parallel=False, verbose=False):
@@ -77,7 +78,12 @@ def train_verbs_parallel(params):
         P['test_data'] = params['test_data'][v]
         map_inputs.append((v, s_o, P))
 
-    parfor = ez_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
+    def FF(aa):
+        return aa*aa
+
+    #print ez_map(FF, range(50), nnodes=P['n_nodes'])
+    #return []
+    parfor = parallel_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
     #parfor = map(verb_parfun, map_inputs)
 
     verbs = {verb.v:verb for verb in parfor}
@@ -95,7 +101,7 @@ if __name__ == '__main__':
 
     grid_params = {
         'rank':     [20, 25], #[1, 5, 10, 20, 30, 40, 50, 100],    
-        'rho':      [0.85, 0.9, 0.95, 0.99],
+        'rho':      [0.9, 0.95]#, 0.85, 0.99],
         # 'eps':      [1e-5, 1e-6, 1e-7],
         # 'stop_t':   [0, 0.003, 0.01, 0.03],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
@@ -113,17 +119,17 @@ if __name__ == '__main__':
         'rank'          : 15,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 1,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 3,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.9,
         'eps'           : 1e-6,
-        'cg'            : 5,        # TODO set to 0 for full data,
-        'ck'            : 5,        # TODO set to -1 for full data  (minus 1 point),
+        'cg'            : 0,        # TODO set to 0 for full data,
+        'ck'            : 0,        # TODO set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
-        'n_nodes'       : 4,
+        'n_nodes'       : 85,
     }
 
 
