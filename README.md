@@ -1,4 +1,4 @@
-# Learning Low Rank Tensors Representations of Verbs
+# Learning Low Rank Tensor Representations of Verbs
 
 This is a recreation and modification of
 
