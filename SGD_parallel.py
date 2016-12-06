@@ -48,6 +48,47 @@ def train_trials_grid(params, grid_params, parallel=False):
 
 
 
+def train_trials_grid_parallel(params, grid_params):
+    it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+    rows = []
+
+    iter_ = enumerate(itertools.product(*it_params))
+    loop1 = tqdm(iter_) if params['verbose'] else iter_
+
+    for i, grid_iter in loop1:
+        P = dict(params.items() + list(grid_iter))
+
+        best_acc_gs = 0.0
+        best_acc_ks = 0.0
+
+        verb_fun = lambda _: train_verbs(test_to_params(P))
+
+        t1 = time.time()        
+        parfor = MPI_map(verb_fun, range(P['n_trials']), progress_bar=False)
+        t2 = time.time()
+
+        for verbs in parfor:
+
+            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=P['verbose'])[0]
+            if curr_acc_gs > best_acc_gs:
+                save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
+                best_acc_gs = curr_acc_gs
+
+            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
+            if curr_acc_ks > best_acc_ks:
+                save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
+                best_acc_gs = curr_acc_ks
+
+        # Append row with metadata and accuracy
+        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
+                          ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
+        pd.DataFrame(rows).to_csv(params['grid_file'])
+        print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}'.format(i, t2-t1, best_acc_gs, best_acc_ks)
+
+
+
+
+
 def verb_parfun(arguments):
     """
     Build and train model for each verb
@@ -161,7 +202,7 @@ if __name__ == '__main__':
     # Train / load verb parameters
 
     # train_trials(params, parallel=True)
-    train_trials_grid(params, grid_params, parallel=True)
+    train_trials_grid_parallel(params, grid_params)
 
     # verbs = load_verbs(params['save_file'] + '.npy')
     # test_verbs(verbs, w2v_nn, gs_data, dset='GS', verbal=True)
