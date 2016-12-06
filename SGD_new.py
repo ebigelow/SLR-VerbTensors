@@ -35,15 +35,15 @@ def test_verbs(verbs, w2v_nn, test_data, dset='GS', verbose=False):
     return rho_, pvalue 
 
 
-def train_verbs(params, verbose=False):
+def train_verbs(params):
     # Build and train model for each verb
     verbs = {}
 
     it = params['w2v_svo'].items()
-    loop = tqdm(it, desc='', leave=True) if verbose else it
+    loop = tqdm(it, desc='', leave=True) if params['verbose'] else it
 
     for v, s_o in loop:  
-        if verbose:  loop.set_description('Training: "' + v + '"')
+        if params['verbose']:  loop.set_description('Training: "' + v + '"')
 
         P = params.copy()
         P['test_data'] = params['test_data'][v]
@@ -64,7 +64,7 @@ def train_verbs(params, verbose=False):
 
 
 
-def train_trials(params, parallel=False, verbose=False):
+def train_trials(params, parallel=False):
     """
     Train all verbs `n_trials` individual times.
 
@@ -72,22 +72,22 @@ def train_trials(params, parallel=False, verbose=False):
     best_acc_gs = 0.0
     best_acc_ks = 0.0
 
-    loop = trange if verbose else range
-    
+    loop = trange if params['verbose'] else range
+
     for k in loop(params['n_trials']):
         P = test_to_params(params)
 
         # Train verbs
         #verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose=verbose)
-        verbs = train_verbs(P, verbose=verbose)
+        verbs = train_verbs(P)
 
         # Update saved weights for best-scoring parameters
-        curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=False)[0]
+        curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=P['verbose'])[0]
         if curr_acc_gs > best_acc_gs:
             save_verbs(verbs, P['save_file'] + '-GS.npy')
             best_acc_gs = curr_acc_gs
 
-        curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=False)[0]
+        curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
         if curr_acc_ks > best_acc_ks:
             save_verbs(verbs, P['save_file'] + '-KS.npy')
             best_acc_ks = curr_acc_ks
@@ -105,8 +105,8 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-1',
-        'verbose'       : False,
+        'save_file'     : 'data/test-3',
+        'verbose'       : True,
         'train'         : True,
         'rank'          : 5,
         'batch_size'    : 20,
@@ -117,8 +117,8 @@ if __name__ == '__main__':
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.9,
         'eps'           : 1e-6,
-        'cg'            : 5,      # set to 0 for full data,
-        'ck'            : 5,     # set to -1 for full data  (minus 1 point),
+        'cg'            : 0,      # set to 0 for full data,
+        'ck'            : 0,     # set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
         'n_nodes'       : 4,

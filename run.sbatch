@@ -3,7 +3,7 @@
 #SBATCH -o vten_output_%j
 #SBATCH -p standard
 #SBATCH -t 1:00:00
-#SBATCH -N 4 
+#SBATCH -N 4
 #SBATCH --ntasks-per-node=22
 
 module load python/2.7.12/b2

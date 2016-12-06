@@ -4,16 +4,16 @@ from utils import *
 from SGD_new import *
 from verb import *
 
-from pyina.ez_map import ez_map
-from pyina.parallel_map2 import parallel_map
+from SimpleMPI.MPI_map import MPI_map
 
+import time
 
-def train_trials_grid(params, grid_params, parallel=False, verbose=False):
+def train_trials_grid(params, grid_params, parallel=False):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
     iter_ = enumerate(itertools.product(*it_params))
-    loop1 = tqdm(iter_) if verbose else iter_
+    loop1 = tqdm(iter_) if params['verbose'] else iter_
 
     for i, grid_iter in loop1:
         params_iter = dict(params.items() + list(grid_iter))
@@ -21,29 +21,30 @@ def train_trials_grid(params, grid_params, parallel=False, verbose=False):
         best_acc_gs = 0.0
         best_acc_ks = 0.0
 
-        loop2 = trange if verbose else range
+        loop2 = trange if params['verbose'] else range
 
+        t1 = time.time()
         for k in loop2(params['n_trials']):
             P = test_to_params(params_iter)
-
             # verbs = train_verbs(P)
             verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
-            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=False)[0]
+            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=params['verbose'])[0]
             if curr_acc_gs > best_acc_gs:
                 save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
                 best_acc_gs = curr_acc_gs
 
-            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=False)[0]
+            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=params['verbose'])[0]
             if curr_acc_ks > best_acc_ks:
                 save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
                 best_acc_gs = curr_acc_ks
 
+        elapsed = time.time() - t1
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        #print '~~~~~ Grid iteration: {}   best GS: {}   best KS: {}'.format(i, best_acc_gs, best_acc_ks)
+        print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}'.format(i, elapsed, best_acc_gs, best_acc_ks)
 
 
 
@@ -63,8 +64,7 @@ def verb_parfun(arguments):
     elif P['optimizer'] == 'ADAD':
         parameterize(verb.ADA_delta, P)
 
-    verb.v = v
-    return verb
+    return (v, verb)
 
 
 def train_verbs_parallel(params):
@@ -75,18 +75,20 @@ def train_verbs_parallel(params):
     map_inputs = []
     for v, s_o in params['w2v_svo'].items():
         P = params.copy()
+
+        nouns = [n for pair in s_o for n in pair]
+        P['w2v_nn'] = {n:vec for n, vec in P['w2v_nn'].items() if n in nouns}
         P['test_data'] = params['test_data'][v]
+        del P['w2v_svo']; del P['ks_data']; del P['gs_data']
+
         map_inputs.append((v, s_o, P))
 
-    def FF(aa):
-        return aa*aa
-
-    #print ez_map(FF, range(50), nnodes=P['n_nodes'])
     #return []
-    parfor = parallel_map(verb_parfun, map_inputs, nnodes=P['n_nodes'])
+    parfor = MPI_map(verb_parfun, map_inputs, progress_bar=False)
+    #print '\n\n== len: {}\n\n'.format([len(abc) for abc in parfor])
     #parfor = map(verb_parfun, map_inputs)
 
-    verbs = {verb.v:verb for verb in parfor}
+    verbs = {v:verb for v,verb in parfor}
     return verbs
 
 
@@ -116,10 +118,10 @@ if __name__ == '__main__':
         'save_file'     : 'data/test-2/grid',
         'grid_file'     : 'data/test-2/grid_accuracy.csv',
         'verbose'       : False,
-        'rank'          : 15,
+        'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 3,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 1,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'optimizer'     : 'ADAD',  # | 'SGD',
@@ -129,7 +131,6 @@ if __name__ == '__main__':
         'ck'            : 0,        # TODO set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
-        'n_nodes'       : 85,
     }
 
 
@@ -159,7 +160,7 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------
     # Train / load verb parameters
 
-    train_trials(params, parallel=True)
+    # train_trials(params, parallel=True)
     train_trials_grid(params, grid_params, parallel=True)
 
     # verbs = load_verbs(params['save_file'] + '.npy')
@@ -173,3 +174,4 @@ if __name__ == '__main__':
 
 
 
+# 
