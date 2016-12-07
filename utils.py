@@ -4,12 +4,9 @@ import inspect
 
 
 
+IGNORE = ['w2v_nn', 'w2v_svo', 'w2v_svo_full', 'test_data', 'gs_data', 'ks_data', 'objects', 'subjects', 'sentences']
 
 
-
-
-
-IGNORE = ['w2v_nn', 'w2v_svo', 'w2v_svo_full', 'test_data', 'gs_data', 'ks_data']
 
 
 def save_meta(params, fname):
