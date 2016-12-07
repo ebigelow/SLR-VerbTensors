@@ -47,6 +47,8 @@ def train_trials_grid(params, grid_params, parallel=False):
         print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}'.format(i, elapsed, best_acc_gs, best_acc_ks)
 
 
+def verb_fun(P):
+    return train_verbs(test_to_params(P))
 
 def train_trials_grid_parallel(params, grid_params):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
@@ -61,10 +63,9 @@ def train_trials_grid_parallel(params, grid_params):
         best_acc_gs = 0.0
         best_acc_ks = 0.0
 
-        verb_fun = lambda _: train_verbs(test_to_params(P))
 
         t1 = time.time()        
-        parfor = MPI_map(verb_fun, range(P['n_trials']), progress_bar=False)
+        parfor = MPI_map(verb_fun, [P]*P['n_trials'], progress_bar=False)
         t2 = time.time()
 
         for verbs in parfor:
@@ -156,13 +157,13 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-2/grid',
-        'grid_file'     : 'data/test-2/grid_accuracy.csv',
+        'save_file'     : 'data/test-4/grid',
+        'grid_file'     : 'data/test-4/grid_accuracy.csv',
         'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 1,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 40,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'optimizer'     : 'ADAD',  # | 'SGD',
