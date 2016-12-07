@@ -5,27 +5,31 @@ from tqdm import tqdm, trange
 
 class Verb:
 
-    def __init__(self, test_data=None, stop_t=0.01, rank=50, svec=100, nvec=100, init_noise=0.1):
+    def __init__(self, test_data=None, stop_t=0.01, rank=50, svec=100, nvec=100, 
+                 init_noise=0.1, init_restarts=1):
         self.test_data, self.stop_t = (test_data, stop_t)
         self.rank, self.svec, self.nvec = (rank, svec, nvec)
-        self.init_weights(init_noise)
+        self.init_weights(init_noise, init_restarts)
 
-    def init_weights(self, init_noise):
+    def init_weights_(self, init_noise):
         self.P = init_noise * np.random.rand(self.rank, self.svec)
         self.Q = init_noise * np.random.rand(self.rank, self.svec)
         self.R = init_noise * np.random.rand(self.rank, self.svec)
 
-    def init_weights_(self, init_noise):
+    def init_weights(self, init_noise, init_restarts=1):
         best_L = float('inf')
         best_params = ()
-        for i in range(1000):
+        for i in range(init_restarts):
             self.P = init_noise * np.random.rand(self.rank, self.svec)
             self.Q = init_noise * np.random.rand(self.rank, self.svec)
             self.R = init_noise * np.random.rand(self.rank, self.svec)
             L = self.L(*self.test_data)
-            if L < best_L:
+            if i==0 or L < best_L:
                 best_L = L
-                best_params = (self.P, self.Q, self.R)
+                best_params = (self.P.copy(), self.Q.copy(), self.R.copy())
+
+        self.P, self.Q, self.R = best_params
+
 
 
     def V(self, s, o):

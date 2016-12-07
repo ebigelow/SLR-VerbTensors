@@ -4,7 +4,7 @@ from utils import *
 from SGD_new import *
 from verb import *
 
-# from SimpleMPI.MPI_map import MPI_map
+from SimpleMPI.MPI_map import MPI_map
 
 import time
 
@@ -44,7 +44,7 @@ def train_trials_grid(params, grid_params, parallel=False):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}'.format(i, elapsed, best_acc_gs, best_acc_ks)
+        print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, elapsed, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
 def verb_fun(P):
@@ -84,7 +84,7 @@ def train_trials_grid_parallel(params, grid_params):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}'.format(i, t2-t1, best_acc_gs, best_acc_ks)
+        print '~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_), t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
 
@@ -144,10 +144,12 @@ if __name__ == '__main__':
     # Grid-search parameters
 
     grid_params = {
-        'rank':     [20, 25], #[1, 5, 10, 20, 30, 40, 50, 100],    
-        'rho':      [0.9, 0.95]#, 0.85, 0.99],
+        #'rank':     [1, 5, 10, 20, 30, 40, 50],    
+        #'rho':      [0.9, 0.95, 0.99],
+        #'init_restarts': [1, 1000],
+        'stop_t':   [0, 0.01, 0.03],
+        'learning_rate': [0.5, 1.0, 2.0],
         # 'eps':      [1e-5, 1e-6, 1e-7],
-        # 'stop_t':   [0, 0.003, 0.01, 0.03],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
     }
 
@@ -157,17 +159,18 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-4/grid',
-        'grid_file'     : 'data/test-4/grid_accuracy.csv',
+        'save_file'     : 'data/test-6/grid',
+        'grid_file'     : 'data/test-6/grid_accuracy.csv',
         'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 120,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 40,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
+        'init_restarts' : 1000,
         'optimizer'     : 'ADAD',  # | 'SGD',
-        'rho'           : 0.9,
+        'rho'           : 0.95,
         'eps'           : 1e-6,
         'cg'            : 0,        # TODO set to 0 for full data,
         'ck'            : 0,        # TODO set to -1 for full data  (minus 1 point),
