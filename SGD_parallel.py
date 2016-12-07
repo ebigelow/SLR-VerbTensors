@@ -4,7 +4,7 @@ from utils import *
 from SGD_new import *
 from verb import *
 
-from SimpleMPI.MPI_map import MPI_map
+# from SimpleMPI.MPI_map import MPI_map
 
 import time
 
@@ -78,7 +78,7 @@ def train_trials_grid_parallel(params, grid_params):
             curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
             if curr_acc_ks > best_acc_ks:
                 save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
-                best_acc_gs = curr_acc_ks
+                best_acc_ks = curr_acc_ks
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 40,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 120,        # TODO change back to higher number  (also cg, ck)
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'optimizer'     : 'ADAD',  # | 'SGD',

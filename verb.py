@@ -15,6 +15,19 @@ class Verb:
         self.Q = init_noise * np.random.rand(self.rank, self.svec)
         self.R = init_noise * np.random.rand(self.rank, self.svec)
 
+    def init_weights_(self, init_noise):
+        best_L = float('inf')
+        best_params = ()
+        for i in range(1000):
+            self.P = init_noise * np.random.rand(self.rank, self.svec)
+            self.Q = init_noise * np.random.rand(self.rank, self.svec)
+            self.R = init_noise * np.random.rand(self.rank, self.svec)
+            L = self.L(*self.test_data)
+            if L < best_L:
+                best_L = L
+                best_params = (self.P, self.Q, self.R)
+
+
     def V(self, s, o):
         P,Q,R = (self.P, self.Q, self.R)
         Qs_Ro = Q.dot(s) * R.dot(o)
@@ -66,7 +79,9 @@ class Verb:
 
         loop = trange(epochs) if verbose else range(epochs)
         for e in loop:
-            for i in range(batches):
+            
+            shuffled_batches = sorted(range(batches), key=lambda x: np.random.rand())
+            for i in shuffled_batches:
 
                 P,Q,R = (self.P, self.Q, self.R)
                 t = sentences[i : i + batch_size].T

@@ -108,7 +108,7 @@ if __name__ == '__main__':
         'save_file'     : 'data/test-3',
         'verbose'       : True,
         'train'         : True,
-        'rank'          : 5,
+        'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
         'n_trials'      : 5,
@@ -121,7 +121,6 @@ if __name__ == '__main__':
         'ck'            : 0,     # set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
-        'n_nodes'       : 4,
     }
 
 
