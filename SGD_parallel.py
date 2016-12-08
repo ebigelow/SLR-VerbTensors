@@ -54,7 +54,7 @@ def train_trials_grid_parallel(params, grid_params):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
-    iter_ = enumerate(itertools.product(*it_params))
+    iter_ = list(enumerate(itertools.product(*it_params)))
     loop1 = tqdm(iter_) if params['verbose'] else iter_
 
     for i, grid_iter in loop1:
@@ -84,7 +84,7 @@ def train_trials_grid_parallel(params, grid_params):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['grid_file'])
-        print '~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_), t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
+        print '~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_)+1, t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
 
