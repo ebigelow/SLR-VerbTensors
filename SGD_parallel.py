@@ -6,7 +6,19 @@ from verb import *
 
 from SimpleMPI.MPI_map import MPI_map
 
-import time
+import time, os, re
+
+
+
+def save_acc(i, verbs, P, best_acc, test_data, dset='GS'):
+    curr_acc = test_verbs(verbs, P['w2v_nn'], test_data, 
+                          dset=dset, verbose=P['verbose'])[0]
+    if curr_acc > best_acc:
+        save_verbs(verbs, '{}/grid-{}_{}.npy'.format(P['out_dir'], i, dset))
+        return curr_acc
+    else:
+        return best_acc
+
 
 def train_trials_grid(params, grid_params, parallel=False):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
@@ -25,19 +37,12 @@ def train_trials_grid(params, grid_params, parallel=False):
 
         t1 = time.time()
         for k in loop2(params['n_trials']):
+
             P = test_to_params(params_iter)
-            # verbs = train_verbs(P)
             verbs = train_verbs_parallel(P) if parallel else train_verbs(P)
 
-            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=params['verbose'])[0]
-            if curr_acc_gs > best_acc_gs:
-                save_verbs(verbs, '{}/grid-{}_GS.npy'.format(P['save_dir'], i))
-                best_acc_gs = curr_acc_gs
-
-            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=params['verbose'])[0]
-            if curr_acc_ks > best_acc_ks:
-                save_verbs(verbs, '{}/grid-{}_KS.npy'.format(P['save_dir'], i))
-                best_acc_gs = curr_acc_ks
+            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
+            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
 
         elapsed = time.time() - t1
         # Append row with metadata and accuracy
@@ -63,30 +68,52 @@ def train_trials_grid_parallel(params, grid_params):
         best_acc_gs = 0.0
         best_acc_ks = 0.0
 
-
         t1 = time.time()        
         parfor = MPI_map(verb_fun, [P]*P['n_trials'], progress_bar=False)
         t2 = time.time()
 
         for verbs in parfor:
-
-            curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=P['verbose'])[0]
-            if curr_acc_gs > best_acc_gs:
-                save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
-                best_acc_gs = curr_acc_gs
-
-            curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
-            if curr_acc_ks > best_acc_ks:
-                save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
-                best_acc_ks = curr_acc_ks
+            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
+            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
-        pd.DataFrame(rows).to_csv(params['grid_file'])
+        pd.DataFrame(rows).to_csv(params['out_dir'] + 'grid_accuracy.csv')
         print '~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_)+1, t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
+
+def train_trials_grid_parallel2(params, grid_params):
+    n_trials = params['n_trials']
+
+    it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+    iter_ = list(itertools.product(*it_params))
+
+    # ----------------------------------------------------------------------------------------
+    # Run experiment
+
+    map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid))] * n_trials]
+    parfor = MPI_map(verb_fun, map_P, progress_bar=False)
+
+    # ----------------------------------------------------------------------------------------
+    # Save best-scoring parameters, record accuracy for each trial
+
+    rows = []
+    for i in range(len(iter_)):
+        best_acc_gs = 0.0
+        best_acc_ks = 0.0
+        trial_verbs = parfor[i : i+n_trials]
+
+        for j, verbs in enumerate(trial_verbs):
+            P = map_P[i + j]
+            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
+            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
+
+        # Append row with metadata and accuracy
+        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
+                          ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
+    pd.DataFrame(rows).to_csv(params['out_dir'] + 'grid_accuracy.csv')
 
 
 
@@ -125,10 +152,7 @@ def train_verbs_parallel(params):
 
         map_inputs.append((v, s_o, P))
 
-    #return []
     parfor = MPI_map(verb_parfun, map_inputs, progress_bar=False)
-    #print '\n\n== len: {}\n\n'.format([len(abc) for abc in parfor])
-    #parfor = map(verb_parfun, map_inputs)
 
     verbs = {v:verb for v,verb in parfor}
     return verbs
@@ -147,7 +171,7 @@ if __name__ == '__main__':
         #'rank':     [1, 5, 10, 20, 30, 40, 50],    
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
-        'stop_t':   [0, 0.01, 0.03],
+        # 'stop_t':   [0, 0.01, 0.03],
         'learning_rate': [0.5, 1.0, 2.0],
         # 'eps':      [1e-5, 1e-6, 1e-7],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
@@ -160,26 +184,28 @@ if __name__ == '__main__':
 
     params = {   
         'out_dir'       : 'data/out/run-{}',
-        'verbose'       : False,
+        'verbose'       : True,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 40,
+        'n_trials'      : 1,
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'init_restarts' : 1000,
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.95,
         'eps'           : 1e-6,
-        'cg'            : 0,
-        'ck'            : 0,
+        'cg'            : 2,
+        'ck'            : 2,
         'n_stop'        : 0.1,
         'stop_t'        : 0,
     }
 
     dirs = os.listdir('/'.join(params['out_dir'].split('/')[:-1]))
-    dir_n = max(int(j) for dir_ in dirs for j in re.split(dir_, '.+-([0-9]+)'))
+    reg = re.compile('.+-([0-9]+)')
+    dir_n = max([0] + [int(j) for dir_ in dirs for j in reg.findall(dir_)])
     params['out_dir'] = params['out_dir'].format(dir_n + 1)
+    if not os.path.exists(params['out_dir']): os.mkdir(params['out_dir'])
 
 
     # ------------------------------------------------------------------------
@@ -207,12 +233,10 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------
     # Train / load verb parameters
 
-    # train_trials(params, parallel=True)
-    train_trials_grid_parallel(params, grid_params)
+    #train_trials(params, parallel=True)
+    # train_trials_grid_parallel(params, grid_params)
+    train_trials_grid_parallel2(params, grid_params)
 
-    # verbs = load_verbs(params['save_file'] + '.npy')
-    # test_verbs(verbs, w2v_nn, gs_data, dset='GS', verbal=True)
-    # test_verbs(verbs, w2v_nn, ks_data, dset='KS', verbal=True)
 
 
 
