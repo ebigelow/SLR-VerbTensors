@@ -6,7 +6,7 @@ from verb import *
 
 from SimpleMPI.MPI_map import MPI_map
 
-import time, os, re
+import time, os, sys
 
 
 
@@ -53,7 +53,7 @@ def train_trials_grid(params, grid_params, parallel=False):
 
 
 def verb_fun(P):
-    return train_verbs(test_to_params(P))
+    return train_verbs(test_to_params(P)), tuple((k,v) for k,v in P.items() if k not in IGNORE)
 
 def train_trials_grid_parallel(params, grid_params):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
@@ -79,7 +79,7 @@ def train_trials_grid_parallel(params, grid_params):
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
-        pd.DataFrame(rows).to_csv(params['out_dir'] + 'grid_accuracy.csv')
+        pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
         print '~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_)+1, t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
@@ -94,26 +94,33 @@ def train_trials_grid_parallel2(params, grid_params):
     # Run experiment
 
     map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid))] * n_trials]
+    t1 = time.time()
     parfor = MPI_map(verb_fun, map_P, progress_bar=False)
+    t2 = time.time()
+    print 'MPI done. Time: {}'.format(t2-t1)
 
     # ----------------------------------------------------------------------------------------
     # Save best-scoring parameters, record accuracy for each trial
 
+    from collections import defaultdict
+    verb_bins = defaultdict(lambda: list())
+    for result, par in parfor:
+        verb_bins[par].append(result)
+
     rows = []
-    for i in range(len(iter_)):
+    for i, (par, trial_verbs) in enumerate(verb_bins.items()):
         best_acc_gs = 0.0
         best_acc_ks = 0.0
-        trial_verbs = parfor[i : i+n_trials]
 
         for j, verbs in enumerate(trial_verbs):
-            P = map_P[i + j]
-            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
-            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
+            best_acc_gs = save_acc(i, verbs, params, best_acc_gs, params['gs_data'], dset='GS')
+            best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
-                          ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
-    pd.DataFrame(rows).to_csv(params['out_dir'] + 'grid_accuracy.csv')
+                          ('id', i) ]  +  list(par)  ))
+        print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
+    pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
 
 
 
@@ -158,6 +165,13 @@ def train_verbs_parallel(params):
     return verbs
 
 
+def make_path(path):
+    try: 
+        os.mkdir(path)
+    except OSError:
+        if not os.path.isdir(path):
+            raise
+
 
 
 if __name__ == '__main__':
@@ -171,8 +185,9 @@ if __name__ == '__main__':
         #'rank':     [1, 5, 10, 20, 30, 40, 50],    
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
-        # 'stop_t':   [0, 0.01, 0.03],
-        'learning_rate': [0.5, 1.0, 2.0],
+        #'stop_t':   [0, 0.01, 0.03],
+        #'learning_rate': [1.0, 2.0, 3.0],
+        'batch_size': [1,5,10,20],
         # 'eps':      [1e-5, 1e-6, 1e-7],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
     }
@@ -184,28 +199,26 @@ if __name__ == '__main__':
 
     params = {   
         'out_dir'       : 'data/out/run-{}',
-        'verbose'       : True,
+        'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 1,
-        'learning_rate' : 1.0,
+        'n_trials'      : 200,
+        'learning_rate' : 2.0,
         'init_noise'    : 0.1,
-        'init_restarts' : 1000,
+        'init_restarts' : 1,
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.95,
         'eps'           : 1e-6,
-        'cg'            : 2,
-        'ck'            : 2,
+        'cg'            : 0,
+        'ck'            : 0,
         'n_stop'        : 0.1,
         'stop_t'        : 0,
     }
 
-    dirs = os.listdir('/'.join(params['out_dir'].split('/')[:-1]))
-    reg = re.compile('.+-([0-9]+)')
-    dir_n = max([0] + [int(j) for dir_ in dirs for j in reg.findall(dir_)])
-    params['out_dir'] = params['out_dir'].format(dir_n + 1)
-    if not os.path.exists(params['out_dir']): os.mkdir(params['out_dir'])
+    dir_n = sys.argv[1]
+    params['out_dir'] = params['out_dir'].format(dir_n)
+    make_path(params['out_dir'])
 
 
     # ------------------------------------------------------------------------
