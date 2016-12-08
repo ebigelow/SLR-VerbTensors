@@ -31,19 +31,19 @@ def train_trials_grid(params, grid_params, parallel=False):
 
             curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=params['verbose'])[0]
             if curr_acc_gs > best_acc_gs:
-                save_verbs(verbs, '{}-{}_GS.npy'.format(P['save_file'], i))
+                save_verbs(verbs, '{}/grid-{}_GS.npy'.format(P['save_dir'], i))
                 best_acc_gs = curr_acc_gs
 
             curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=params['verbose'])[0]
             if curr_acc_ks > best_acc_ks:
-                save_verbs(verbs, '{}-{}_KS.npy'.format(P['save_file'], i))
+                save_verbs(verbs, '{}/grid-{}_KS.npy'.format(P['save_dir'], i))
                 best_acc_gs = curr_acc_ks
 
         elapsed = time.time() - t1
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
-        pd.DataFrame(rows).to_csv(params['grid_file'])
+        pd.DataFrame(rows).to_csv(params['out_dir'] + 'grid_accuracy.csv')
         print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, elapsed, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
@@ -159,25 +159,27 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-6/grid',
-        'grid_file'     : 'data/test-6/grid_accuracy.csv',
+        'out_dir'       : 'data/out/run-{}',
         'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 40,        # TODO change back to higher number  (also cg, ck)
+        'n_trials'      : 40,
         'learning_rate' : 1.0,
         'init_noise'    : 0.1,
         'init_restarts' : 1000,
         'optimizer'     : 'ADAD',  # | 'SGD',
         'rho'           : 0.95,
         'eps'           : 1e-6,
-        'cg'            : 0,        # TODO set to 0 for full data,
-        'ck'            : 0,        # TODO set to -1 for full data  (minus 1 point),
+        'cg'            : 0,
+        'ck'            : 0,
         'n_stop'        : 0.1,
         'stop_t'        : 0,
     }
 
+    dirs = os.listdir('/'.join(params['out_dir'].split('/')[:-1]))
+    dir_n = max(int(j) for dir_ in dirs for j in re.split(dir_, '.+-([0-9]+)'))
+    params['out_dir'] = params['out_dir'].format(dir_n + 1)
 
 
     # ------------------------------------------------------------------------
