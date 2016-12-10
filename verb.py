@@ -11,11 +11,6 @@ class Verb:
         self.rank, self.svec, self.nvec = (rank, svec, nvec)
         self.init_weights(init_noise, init_restarts)
 
-    def init_weights_(self, init_noise):
-        self.P = init_noise * np.random.rand(self.rank, self.svec)
-        self.Q = init_noise * np.random.rand(self.rank, self.svec)
-        self.R = init_noise * np.random.rand(self.rank, self.svec)
-
     def init_weights(self, init_noise, init_restarts=1):
         best_L = float('inf')
         best_params = ()
@@ -29,8 +24,6 @@ class Verb:
                 best_params = (self.P.copy(), self.Q.copy(), self.R.copy())
 
         self.P, self.Q, self.R = best_params
-
-
 
     def V(self, s, o):
         P,Q,R = (self.P, self.Q, self.R)
@@ -60,7 +53,6 @@ class Verb:
             d = cur_loss - self.prev_loss
             self.prev_loss = cur_loss
             return (d > self.stop_t)
-
 
     def SGD(self, sentences, subjects, objects, 
             epochs=100, batch_size=4, learning_rate=1.0, verbose=False):

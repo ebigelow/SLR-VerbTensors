@@ -1,16 +1,61 @@
-import itertools
+"""
 
+
+O(G T V E D)
+
+for grid_params:
+| for n_trials:
+| | for v in verbs:
+| | | for epochs:
+| | | | for d in data[v]:
+| | | | | train = trainer( v, d )
+| | | | | train( w )
+
+
+
+"""
 from utils import *
 from SGD_new import *
 from verb import *
-
 from SimpleMPI.MPI_map import MPI_map
-
-import time, os, sys
-
+import itertools, sys, time
 
 
-def save_acc(i, verbs, P, best_acc, test_data, dset='GS'):
+def test_row(row, w2v_nn, dset):
+    if dset == 'GS':
+        pid, v, s, o, t, gt_score, hilo = row[1]
+        
+        svo1_vec = verbs[v].V(w2v_nn[s], w2v_nn[o])     # "verb"
+        svo2_vec = verbs[t].V(w2v_nn[s], w2v_nn[o])     # "landmark" (target)
+
+    elif dset == 'KS':
+        pid, s1,v1,o1, s2,v2,o2, gt_score = row[1]
+        
+        svo1_vec = verbs[v1].V(w2v_nn[s1], w2v_nn[o1])
+        svo2_vec = verbs[v2].V(w2v_nn[s2], w2v_nn[o2])
+
+    similarity = 1 - cosine(svo1_vec, svo2_vec)     # TODO: test different distances
+    return (similarity, gt_score)
+
+
+def test_verbs_parallel(verbs, w2v_nn, test_data, dset='GS', verbose=False):
+
+    # Predict similarity for GS test data, using learned verb representations
+    test_pairs = []
+    if verbose: print '\n\nTesting on '+dset+' data . . .'
+
+    test_fun = lambda row: test_row(row, w2v_nn, dset)
+    test_pairs = MPI_map(test_fun, test_data.iterrows(), progress_bar=False)
+
+    # Compute spearman R for full data
+    rho_, pvalue = spearmanr(*zip(*test_pairs))
+    if verbose: print '\trho: {}\n\tpvalue: {}'.format(rho_, pvalue)
+    return rho_, pvalue 
+
+
+def save_acc(i, verbs, P, best_acc, test_data, dset='GS', parallel=False):
+    test = test_verbs_parallel if parallel else test_verbs
+
     curr_acc = test_verbs(verbs, P['w2v_nn'], test_data, 
                           dset=dset, verbose=P['verbose'])[0]
     if curr_acc > best_acc:
@@ -52,10 +97,19 @@ def train_trials_grid(params, grid_params, parallel=False):
         print '~~~~~ Grid iteration: {}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, elapsed, best_acc_gs, best_acc_ks, list(grid_iter))
 
 
+
+# ----------------------------------------------------------------------------------------------------
+
+
+
 def verb_fun(P):
     return train_verbs(test_to_params(P)), tuple((k,v) for k,v in P.items() if k not in IGNORE)
 
 def train_trials_grid_parallel(params, grid_params):
+    """
+    Train all verbs, parallelizing trials for each set of parameters.
+
+    """
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
@@ -73,8 +127,8 @@ def train_trials_grid_parallel(params, grid_params):
         t2 = time.time()
 
         for verbs in parfor:
-            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
-            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
+            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS', parallel=True)
+            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS', parallel=True)
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
@@ -84,7 +138,17 @@ def train_trials_grid_parallel(params, grid_params):
 
 
 
+# ----------------------------------------------------------------------------------------------------
+
+
+
 def train_trials_grid_parallel2(params, grid_params):
+    """
+    Parallelize across trials AND all grid parameter settings.
+
+    I believe this is the fastest, by a decent margin.
+
+    """
     n_trials = params['n_trials']
 
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
@@ -117,10 +181,13 @@ def train_trials_grid_parallel2(params, grid_params):
             best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
 
         # Append row with metadata and accuracy
-        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
-                          ('id', i) ]  +  list(par)  ))
+        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
         print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
     pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
+
+
+
+# ----------------------------------------------------------------------------------------------------
 
 
 
@@ -145,13 +212,16 @@ def verb_parfun(arguments):
 
 def train_verbs_parallel(params):
     """
-    Split test data before, to minimize RAM overhead
+    Train 1 parameter grid item at a time, parallelize across verbs.
+
+    
 
     """
     map_inputs = []
     for v, s_o in params['w2v_svo'].items():
         P = params.copy()
 
+        # Split data to include only what each MPI process needs
         nouns = [n for pair in s_o for n in pair]
         P['w2v_nn'] = {n:vec for n, vec in P['w2v_nn'].items() if n in nouns}
         P['test_data'] = params['test_data'][v]
@@ -159,18 +229,12 @@ def train_verbs_parallel(params):
 
         map_inputs.append((v, s_o, P))
 
+    # Train verbs in parallel
     parfor = MPI_map(verb_parfun, map_inputs, progress_bar=False)
 
     verbs = {v:verb for v,verb in parfor}
     return verbs
 
-
-def make_path(path):
-    try: 
-        os.mkdir(path)
-    except OSError:
-        if not os.path.isdir(path):
-            raise
 
 
 
@@ -251,11 +315,3 @@ if __name__ == '__main__':
     train_trials_grid_parallel2(params, grid_params)
 
 
-
-
-
-
-
-
-
-# 
