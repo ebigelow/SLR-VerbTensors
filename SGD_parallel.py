@@ -21,41 +21,15 @@ from SimpleMPI.MPI_map import MPI_map
 import itertools, sys, time
 
 
-def test_row(row, w2v_nn, dset):
-    if dset == 'GS':
-        pid, v, s, o, t, gt_score, hilo = row[1]
-        
-        svo1_vec = verbs[v].V(w2v_nn[s], w2v_nn[o])     # "verb"
-        svo2_vec = verbs[t].V(w2v_nn[s], w2v_nn[o])     # "landmark" (target)
-
-    elif dset == 'KS':
-        pid, s1,v1,o1, s2,v2,o2, gt_score = row[1]
-        
-        svo1_vec = verbs[v1].V(w2v_nn[s1], w2v_nn[o1])
-        svo2_vec = verbs[v2].V(w2v_nn[s2], w2v_nn[o2])
-
-    similarity = 1 - cosine(svo1_vec, svo2_vec)     # TODO: test different distances
-    return (similarity, gt_score)
+def save_acc_par(i, verbs, P, best_acc, test_data, dset='GS'):
+    curr_acc = test_verbs(verbs, P['w2v_nn'], test_data, 
+                          dset=dset, verbose=P['verbose'])[0]
+    
+    save_verbs(verbs, '{}/grid-{}_{}.npy'.format(P['out_dir'], i, dset))
+    return verbs, curr_acc
 
 
-def test_verbs_parallel(verbs, w2v_nn, test_data, dset='GS', verbose=False):
-
-    # Predict similarity for GS test data, using learned verb representations
-    test_pairs = []
-    if verbose: print '\n\nTesting on '+dset+' data . . .'
-
-    test_fun = lambda row: test_row(row, w2v_nn, dset)
-    test_pairs = MPI_map(test_fun, test_data.iterrows(), progress_bar=False)
-
-    # Compute spearman R for full data
-    rho_, pvalue = spearmanr(*zip(*test_pairs))
-    if verbose: print '\trho: {}\n\tpvalue: {}'.format(rho_, pvalue)
-    return rho_, pvalue 
-
-
-def save_acc(i, verbs, P, best_acc, test_data, dset='GS', parallel=False):
-    test = test_verbs_parallel if parallel else test_verbs
-
+def save_acc(i, verbs, P, best_acc, test_data, dset='GS'):
     curr_acc = test_verbs(verbs, P['w2v_nn'], test_data, 
                           dset=dset, verbose=P['verbose'])[0]
     if curr_acc > best_acc:
@@ -127,8 +101,8 @@ def train_trials_grid_parallel(params, grid_params):
         t2 = time.time()
 
         for verbs in parfor:
-            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS', parallel=True)
-            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS', parallel=True)
+            best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
+            best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
@@ -184,6 +158,114 @@ def train_trials_grid_parallel2(params, grid_params):
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
         print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
     pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
+
+
+# ----------------------------------------------------------------------------------------------------
+# parallel2 + parallel testing
+
+
+
+
+
+
+def train_trials_grid_parallel3(params, grid_params):
+    """
+    Parallelize across trials AND all grid parameter settings.
+
+    I believe this is the fastest, by a decent margin.
+
+    """
+    n_trials = params['n_trials']
+
+    it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+    iter_ = list(itertools.product(*it_params))
+
+    # ----------------------------------------------------------------------------------------
+    # Run experiment
+
+    map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid))] * n_trials]
+    t1 = time.time()
+    parfor = MPI_map(verb_fun, map_P, progress_bar=False)
+    t2 = time.time()
+    print 'MPI done. Time: {}'.format(t2-t1)
+
+    # ----------------------------------------------------------------------------------------
+    # Save best-scoring parameters, record accuracy for each trial
+
+    from collections import defaultdict
+    verb_bins = defaultdict(lambda: list())
+    for result, par in parfor:
+        verb_bins[par].append(result)
+
+    rows = []
+    for i, (par, trial_verbs) in enumerate(verb_bins.items()):
+
+        save_gs = lambda verbs: save_acc_par(i, verbs, params, params['gs_data'], dset='GS')
+        save_ks = lambda verbs: save_acc_par(i, verbs, params, params['ks_data'], dset='KS')
+
+        gs_verbs, gs_scores = zip( *MPI_map(save_gs, trial_verbs) )
+        ks_verbs, ks_scores = zip( *MPI_map(save_ks, trial_verbs) )
+
+        best_acc_gs = save_best(gs_verbs, gs_scores, dset='GS')
+        best_acc_ks = save_best(ks_verbs, ks_scores, dset='KS')
+
+        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
+        print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
+
+    pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
+
+
+
+
+
+
+
+# def train_trials_grid_parallel3(params, grid_params):
+#     """
+#     Parallelize across trials AND all grid parameter settings.
+
+#     I believe this is the fastest, by a decent margin.
+
+#     """
+#     n_trials = params['n_trials']
+
+#     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+#     iter_ = list(itertools.product(*it_params))
+
+#     # ----------------------------------------------------------------------------------------
+#     # Run experiment
+
+#     map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid))] * n_trials]
+#     t1 = time.time()
+#     parfor = MPI_map(verb_fun, map_P, progress_bar=False)
+#     t2 = time.time()
+#     print 'Training done. Time: {}'.format(t2-t1)
+
+#     # ----------------------------------------------------------------------------------------
+#     # Save best-scoring parameters, record accuracy for each trial
+
+#     from collections import defaultdict
+#     verb_bins = defaultdict(lambda: list())
+#     for result, par in parfor:
+#         verb_bins[par].append(result)
+
+
+#     map_items = enumerate(verb_bins.items())
+#     pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
+
+
+# def save_stuff_TODO(i, item):
+#     par, trial_verbs = item
+#     best_acc_gs = 0.0
+#     best_acc_ks = 0.0
+
+#     for j, verbs in enumerate(trial_verbs):
+#         best_acc_gs = save_acc(i, verbs, params, best_acc_gs, params['gs_data'], dset='GS')
+#         best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
+
+#     # Append row with metadata and accuracy
+#     rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
+#     print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
 
 
 
