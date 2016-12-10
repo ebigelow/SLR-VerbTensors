@@ -21,7 +21,7 @@ from SimpleMPI.MPI_map import MPI_map
 import itertools, sys, time
 
 
-def save_acc_par(i, verbs, P, best_acc, test_data, dset='GS'):
+def save_acc_par(i, verbs, P, test_data, dset='GS'):
     curr_acc = test_verbs(verbs, P['w2v_nn'], test_data, 
                           dset=dset, verbose=P['verbose'])[0]
     
@@ -200,17 +200,20 @@ def train_trials_grid_parallel3(params, grid_params):
     rows = []
     for i, (par, trial_verbs) in enumerate(verb_bins.items()):
 
-        save_gs = lambda verbs: save_acc_par(i, verbs, params, params['gs_data'], dset='GS')
-        save_ks = lambda verbs: save_acc_par(i, verbs, params, params['ks_data'], dset='KS')
+        gs_inputs = [[i] + [verbs] + [params, params['gs_data'], 'GS'] for verbs in trial_verbs]
+        ks_inputs = [[i] + [verbs] + [params, params['ks_data'], 'KS'] for verbs in trial_verbs]
+        #save_acc_par(i, verbs, P, test_data, dset='GS')
 
-        gs_verbs, gs_scores = zip( *MPI_map(save_gs, trial_verbs) )
-        ks_verbs, ks_scores = zip( *MPI_map(save_ks, trial_verbs) )
+        t1 = time.time()
+        gs_verbs, gs_acc = sorted( MPI_map(save_acc_par, gs_inputs, progress_bar=False), key=lambda x: -x[1])[0]
+        ks_verbs, ks_acc = sorted( MPI_map(save_acc_par, ks_inputs, progress_bar=False), key=lambda x: -x[1])[0]
+        t2 = time.time()
 
-        best_acc_gs = save_best(gs_verbs, gs_scores, dset='GS')
-        best_acc_ks = save_best(ks_verbs, ks_scores, dset='KS')
+        save_acc(i, gs_verbs, params, gs_acc, params['gs_data'], dset='GS')
+        save_acc(i, ks_verbs, params, ks_acc, params['ks_data'], dset='KS')
 
-        rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
-        print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
+        rows.append(dict([('accuracy_GS', gs_acc), ('accuracy_KS', ks_acc), ('id', i)] + list(par)))
+        print '~~~~~  best GS: {}   best KS: {}\nTime: {}\n\t{}'.format(gs_acc, ks_acc, t2-t1, par)
 
     pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
 
@@ -331,9 +334,9 @@ if __name__ == '__main__':
         #'rank':     [1, 5, 10, 20, 30, 40, 50],    
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
-        #'stop_t':   [0, 0.01, 0.03],
+        'stop_t':   [1e-5, 1e-6, 1e-7],
         #'learning_rate': [1.0, 2.0, 3.0],
-        'batch_size': [1,5,10,20],
+        #'batch_size': [1,5,10,20],
         # 'eps':      [1e-5, 1e-6, 1e-7],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
     }
@@ -349,7 +352,7 @@ if __name__ == '__main__':
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 200,
+        'n_trials'      : 150,
         'learning_rate' : 2.0,
         'init_noise'    : 0.1,
         'init_restarts' : 1,
@@ -394,6 +397,6 @@ if __name__ == '__main__':
 
     #train_trials(params, parallel=True)
     # train_trials_grid_parallel(params, grid_params)
-    train_trials_grid_parallel2(params, grid_params)
+    train_trials_grid_parallel3(params, grid_params)
 
 
