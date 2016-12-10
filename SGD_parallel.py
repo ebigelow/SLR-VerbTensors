@@ -13,12 +13,51 @@ for grid_params:
 
 
 
+train_trials_grid_parallel
+--------------------------
+
+for grid_params:
+| for n_trials:
+| | for v in verbs:
+| | * for epochs:
+| | * | for d in data[v]:
+| | * | | train = trainer( v, d )
+| | * | | train( w )
+
+
+
+
+train_trials_grid_parallel2
+---------------------------
+
+for grid_params:
+| parfor n_trials:
+| * for v in verbs:
+| * | for epochs:
+| * | | for d in data[v]:
+| * | | | train = trainer( v, d )
+| * | | | train( w )
+
+
+train_trials_grid_parallel3
+---------------------------
+
+parfor grid_params, n_trials:
+* for v in verbs:
+* | for epochs:
+* | | for d in data[v]:
+* | | | train = trainer( v, d )
+* | | | train( w )
+
+
 """
 from utils import *
 from SGD_new import *
 from verb import *
 from SimpleMPI.MPI_map import MPI_map
 import itertools, sys, time
+from itertools import product as combinations
+from collections import defaultdict
 
 
 def save_acc_par(i, verbs, P, test_data, dset='GS'):
@@ -43,7 +82,7 @@ def train_trials_grid(params, grid_params, parallel=False):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
-    iter_ = enumerate(itertools.product(*it_params))
+    iter_ = enumerate(combinations(*it_params))
     loop1 = tqdm(iter_) if params['verbose'] else iter_
 
     for i, grid_iter in loop1:
@@ -77,7 +116,7 @@ def train_trials_grid(params, grid_params, parallel=False):
 
 
 def verb_fun(P):
-    return train_verbs(test_to_params(P)), tuple((k,v) for k,v in P.items() if k not in IGNORE)
+    return train_verbs(test_to_params(P)), par2tuple(P)
 
 def train_trials_grid_parallel(params, grid_params):
     """
@@ -87,7 +126,7 @@ def train_trials_grid_parallel(params, grid_params):
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
     rows = []
 
-    iter_ = list(enumerate(itertools.product(*it_params)))
+    iter_ = list(enumerate(combinations(*it_params)))
     loop1 = tqdm(iter_) if params['verbose'] else iter_
 
     for i, grid_iter in loop1:
@@ -126,7 +165,7 @@ def train_trials_grid_parallel2(params, grid_params):
     n_trials = params['n_trials']
 
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
-    iter_ = list(itertools.product(*it_params))
+    iter_ = list(combinations(*it_params))
 
     # ----------------------------------------------------------------------------------------
     # Run experiment
@@ -135,7 +174,7 @@ def train_trials_grid_parallel2(params, grid_params):
     t1 = time.time()
     parfor = MPI_map(verb_fun, map_P, progress_bar=False)
     t2 = time.time()
-    print 'MPI done. Time: {}'.format(t2-t1)
+    print 'Training done. Time: {}'.format(t2-t1)
 
     # ----------------------------------------------------------------------------------------
     # Save best-scoring parameters, record accuracy for each trial
@@ -178,7 +217,7 @@ def train_trials_grid_parallel3(params, grid_params):
     n_trials = params['n_trials']
 
     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
-    iter_ = list(itertools.product(*it_params))
+    iter_ = list(combinations(*it_params))
 
     # ----------------------------------------------------------------------------------------
     # Run experiment
@@ -187,7 +226,7 @@ def train_trials_grid_parallel3(params, grid_params):
     t1 = time.time()
     parfor = MPI_map(verb_fun, map_P, progress_bar=False)
     t2 = time.time()
-    print 'MPI done. Time: {}'.format(t2-t1)
+    print 'Training done. Time: {}'.format(t2-t1)
 
     # ----------------------------------------------------------------------------------------
     # Save best-scoring parameters, record accuracy for each trial
@@ -221,54 +260,74 @@ def train_trials_grid_parallel3(params, grid_params):
 
 
 
+# ----------------------------------------------------------------------------------------------------
+# + saving to temp files to reduce RAM
 
 
-# def train_trials_grid_parallel3(params, grid_params):
-#     """
-#     Parallelize across trials AND all grid parameter settings.
-
-#     I believe this is the fastest, by a decent margin.
-
-#     """
-#     n_trials = params['n_trials']
-
-#     it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
-#     iter_ = list(itertools.product(*it_params))
-
-#     # ----------------------------------------------------------------------------------------
-#     # Run experiment
-
-#     map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid))] * n_trials]
-#     t1 = time.time()
-#     parfor = MPI_map(verb_fun, map_P, progress_bar=False)
-#     t2 = time.time()
-#     print 'Training done. Time: {}'.format(t2-t1)
-
-#     # ----------------------------------------------------------------------------------------
-#     # Save best-scoring parameters, record accuracy for each trial
-
-#     from collections import defaultdict
-#     verb_bins = defaultdict(lambda: list())
-#     for result, par in parfor:
-#         verb_bins[par].append(result)
+def verb_fun2(params):
+    P = test_to_params(params)
+    verbs = train_verbs(P)
+    save_verbs(verbs, P['temp_file'])
+    return par2tuple(P)
 
 
-#     map_items = enumerate(verb_bins.items())
-#     pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
+def train_trials_grid_parallel4(params, grid_params):
+    """
+    Same as 3 but with saving to temp files to drastically reduce RAM with big experiments.
 
+    """
+    n_trials = params['n_trials']
 
-# def save_stuff_TODO(i, item):
-#     par, trial_verbs = item
-#     best_acc_gs = 0.0
-#     best_acc_ks = 0.0
+    it_params = [zip([k]*len(v), v) for k, v in grid_params.items()]
+    iter_ = list(combinations(*it_params))
 
-#     for j, verbs in enumerate(trial_verbs):
-#         best_acc_gs = save_acc(i, verbs, params, best_acc_gs, params['gs_data'], dset='GS')
-#         best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
+    # ----------------------------------------------------------------------------------------
+    # Run experiment
 
-#     # Append row with metadata and accuracy
-#     rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
-#     print '~~~~~  best GS: {}   best KS: {}\n\t{}'.format(best_acc_gs, best_acc_ks, par)
+    map_P = [i for grid in iter_ for i in [dict(params.items() + list(grid) + [('grid_idx', i)])] * n_trials]
+    for mpi_idx, P in enumerate(map_P):
+        P['mpi_idx'] = mpi_idx
+        P['temp_file'] = P['temp_file'].format(P['grid_idx'], mpi_idx)
+
+    t1 = time.time()
+    parfor = MPI_map(verb_fun2, map_P, progress_bar=False)
+    t2 = time.time()
+    print 'Training done. Time: {}'.format(t2-t1)
+
+    # ----------------------------------------------------------------------------------------
+    # Save best-scoring parameters, record accuracy for each trial
+
+    verb_bins = defaultdict(lambda: list())
+    grid_pars = {}
+    for P in parfor:  
+        grid_idx = P['grid_idx']
+        temp_file = P['temp_file']
+        verb_bins[grid_idx].append(temp_file)
+        grid_pars[grid_idx] = P
+        for k in ['grid_idx', 'mpi_idx', 'temp_file']:
+            del grid_pars[grid_idx][k]
+
+    rows = []
+    for i, temp_files in verb_bins.items():
+
+        trial_verbs = [load_verbs(t) for t in temp_files]
+
+        gs_inputs = [[i] + [verbs] + [params, params['gs_data'], 'GS'] for verbs in trial_verbs]
+        ks_inputs = [[i] + [verbs] + [params, params['ks_data'], 'KS'] for verbs in trial_verbs]
+
+        t1 = time.time()
+        gs_verbs, gs_acc = sorted( MPI_map(save_acc_par, gs_inputs, progress_bar=False), key=lambda x: -x[1])[0]
+        ks_verbs, ks_acc = sorted( MPI_map(save_acc_par, ks_inputs, progress_bar=False), key=lambda x: -x[1])[0]
+        t2 = time.time()
+
+        save_acc(i, gs_verbs, params, gs_acc, params['gs_data'], dset='GS')
+        save_acc(i, ks_verbs, params, ks_acc, params['ks_data'], dset='KS')
+
+        P = par2tuple(grid_pars[i])
+        rows.append(dict([('accuracy_GS', gs_acc), ('accuracy_KS', ks_acc), ('id', i)] + list(P)))
+        print '~~~~~  best GS: {}   best KS: {}\nTime: {}\n\t{}'.format(gs_acc, ks_acc, t2-t1, P)
+
+    pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
 
 
 
@@ -334,7 +393,7 @@ if __name__ == '__main__':
         #'rank':     [1, 5, 10, 20, 30, 40, 50],    
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
-        'stop_t':   [1e-5, 1e-6, 1e-7],
+        'stop_t':   [1e-6, 1e-7, 1e-8],
         #'learning_rate': [1.0, 2.0, 3.0],
         #'batch_size': [1,5,10,20],
         # 'eps':      [1e-5, 1e-6, 1e-7],
@@ -348,11 +407,12 @@ if __name__ == '__main__':
 
     params = {   
         'out_dir'       : 'data/out/run-{}',
+        'temp_file'     : 'data/temp/temp-{}-{}.npy',
         'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 150,
+        'n_trials'      : 50,
         'learning_rate' : 2.0,
         'init_noise'    : 0.1,
         'init_restarts' : 1,
@@ -368,6 +428,10 @@ if __name__ == '__main__':
     dir_n = sys.argv[1]
     params['out_dir'] = params['out_dir'].format(dir_n)
     make_path(params['out_dir'])
+
+    temp_dir = params['temp_file'].split('/')[:-1]
+    make_path(temp_dir)
+
 
 
     # ------------------------------------------------------------------------
@@ -396,7 +460,9 @@ if __name__ == '__main__':
     # Train / load verb parameters
 
     #train_trials(params, parallel=True)
-    # train_trials_grid_parallel(params, grid_params)
-    train_trials_grid_parallel3(params, grid_params)
+    #train_trials_grid_parallel(params, grid_params)
+    #train_trials_grid_parallel2(params, grid_params)
+    #train_trials_grid_parallel3(params, grid_params)
+    train_trials_grid_parallel4(params, grid_params)
 
 

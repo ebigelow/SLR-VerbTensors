@@ -206,29 +206,3 @@ class Verb:
         self.Q = self.min_params['Q']
         self.R = self.min_params['R']
         del self.min_params
-
-
-
-
-def save_verbs(verbs, fname):
-    d = { w: { 'r':v.rank, 's':v.svec, 'n':v.nvec,
-               'P': v.P,   'Q': v.Q,   'R': v.R  }  for w, v in verbs.items()}
-    np.save(fname, d)
-    #print 'Saved verbs to: ' + fname
-
-
-def load_verbs(fname):
-    # TODO: update
-    d = np.load(fname).item()
-    verbs = {}
-
-    for w, v in d.items():
-        verb = Verb(rank=v['r'], svec=v['s'], nvec=v['n'])
-        verb.P = v['P']
-        verb.Q = v['Q']
-        verb.R = v['R']
-        verbs[w] = verb
-
-    print 'Loaded verbs from ' + fname
-    return verbs
-

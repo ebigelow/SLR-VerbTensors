@@ -3,12 +3,60 @@ import pandas as pd
 import inspect
 import os
 
+from verb import Verb
+
+
+
+
 
 def make_path(path):
     try: 
         os.mkdir(path)
     except OSError:
         if not os.path.isdir(path):  raise
+
+def par2tuple(P):
+    return tuple((k,v) for k,v in P.items() if k not in IGNORE)
+
+
+
+# ----------------------------------------------------------------------------------------------------
+# Saving / loading tools
+
+
+
+def save_verb(verb, fname):
+    d = { 'stop_t': v.stop_t, 
+          'r':v.rank, 's':v.svec, 'n':v.nvec,
+          'P': v.P,   'Q': v.Q,   'R': v.R}
+    np.save(fname, d)
+
+def load_verb(fname):
+    d = np.load(fname).item()
+    v = parameterize(Verb, d)
+    v.P, v.Q, v.R = (d['P'], d['Q'], d['R'])
+    return v
+
+def save_verbs(verbs, fname):
+    d = { w: { 'stop_t': v.stop_t, 
+               'r':v.rank, 's':v.svec, 'n':v.nvec,
+               'P': v.P,   'Q': v.Q,   'R': v.R   }  for w, v in verbs.items()}
+    np.save(fname, d)
+
+def load_verbs(fname):
+    d = np.load(fname).item()
+    verbs = {}
+
+    for w, v in d.items():
+        verb = parameterize(Verb, v)
+        verb.P = v['P']
+        verb.Q = v['Q']
+        verb.R = v['R']
+        verbs[w] = verb
+
+    print 'Loaded verbs from ' + fname
+    return verbs
+
 
 
 
