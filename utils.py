@@ -48,13 +48,13 @@ def load_verbs(fname):
     verbs = {}
 
     for w, v in d.items():
+        v['init_restarts'] = 0
         verb = parameterize(Verb, v)
         verb.P = v['P']
         verb.Q = v['Q']
         verb.R = v['R']
         verbs[w] = verb
 
-    print 'Loaded verbs from ' + fname
     return verbs
 
 
