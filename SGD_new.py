@@ -2,7 +2,7 @@
 from utils import *
 from scipy.spatial.distance import cosine
 from scipy.stats import spearmanr
-from verb import Verb, load_verbs, save_verbs
+from verb import Verb
 from tqdm import tqdm, trange
 
 

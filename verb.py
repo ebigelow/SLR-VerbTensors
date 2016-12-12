@@ -13,7 +13,7 @@ class Verb:
 
     def init_weights(self, init_noise, init_restarts=1):
         best_L = float('inf')
-        best_params = ()
+        best_params = (None,None,None)
         for i in range(init_restarts):
             self.P = init_noise * np.random.rand(self.rank, self.svec)
             self.Q = init_noise * np.random.rand(self.rank, self.svec)
