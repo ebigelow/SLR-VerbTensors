@@ -1,4 +1,3 @@
-# from utils import format_data, parameterize, test_to_params, save_meta, load_test_data, load_word2vec
 from utils import *
 from scipy.spatial.distance import cosine
 from scipy.stats import spearmanr
@@ -121,6 +120,10 @@ if __name__ == '__main__':
         'ck'            : 0,     # set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
         'stop_t'        : 0,
+        'norm'          : 'L1',
+        'lamb_P'        : 0.0,
+        'lamb_Q'        : 1e-2,
+        'lamb_R'        : 1e-2,
     }
 
 

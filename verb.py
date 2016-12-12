@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.linalg import norm
 from collections import defaultdict
 from tqdm import tqdm, trange
 
@@ -6,7 +7,8 @@ from tqdm import tqdm, trange
 class Verb:
 
     def __init__(self, test_data=None, stop_t=0.01, rank=50, svec=100, nvec=100, 
-                 init_noise=0.1, init_restarts=1):
+                 lamb_P=1e-3, lamb_Q=1e-1, lamb_R=1e-1, init_noise=0.1, init_restarts=1):
+        self.lamb = (lamb_P, lamb_Q, lamb_R) 
         self.test_data, self.stop_t = (test_data, stop_t)
         self.rank, self.svec, self.nvec = (rank, svec, nvec)
         self.init_weights(init_noise, init_restarts)
@@ -110,7 +112,7 @@ class Verb:
 
     def ADA_delta(self, sentences, subjects, objects, n_trials=10,
                   epochs=100, batch_size=100, learning_rate=1.0,
-                  rho=0.95, eps=1e-6, verbose=False):
+                  rho=0.95, eps=1e-6, verbose=False, norm=None):
         """
         https://arxiv.org/pdf/1212.5701v1.pdf
 
@@ -153,6 +155,13 @@ class Verb:
         E_g2_prev  = [0.0, 0.0, 0.0]
         E_dx2_prev = [0.0, 0.0, 0.0]
 
+        if norm is None:
+            prox = lambda a, lamb: a
+        elif norm == 'L1':
+            prox = lambda a, lamb: np.sgn(a) * np.maximum(0, abs(a) - lamb)
+        elif norm == 'L2':
+            prox = lambda a, lamb: np.maximum(0, 1 - lamb / norm(a, 2))
+
         loop = trange(epochs) if verbose else range(epochs)
         for e in loop:
 
@@ -169,7 +178,8 @@ class Verb:
                 Qs_Ro = Qs * Ro
 
                 if e % 3 == 0:
-                    g = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
+                    g_ = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
+                    g = prox(g_)
                     E_g2  = rho * E_g2_prev[0]  +  (1-rho) * g**2
                     dL_dP = -g * np.sqrt(E_dx2_prev[0] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[0]  +  (1-rho) * dL_dP**2
@@ -179,7 +189,8 @@ class Verb:
                     E_dx2_prev[0] = E_dx2
 
                 elif e % 3 == 1:
-                    g = ( Ro * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(s.T)
+                    g_ = ( Ro * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(s.T)
+                    g = prox(g_)
                     E_g2  = rho * E_g2_prev[1]  +  (1-rho) * g**2
                     dL_dQ = -g * np.sqrt(E_dx2_prev[1] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[1]  +  (1-rho) * dL_dQ**2
@@ -189,7 +200,8 @@ class Verb:
                     E_dx2_prev[1] = E_dx2
 
                 elif e % 3 == 2:
-                    g = ( Qs * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(o.T)
+                    g_ = ( Qs * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(o.T)
+                    g = prox(g_)
                     E_g2  = rho * E_g2_prev[2]  +  (1-rho) * g**2
                     dL_dR = -g * np.sqrt(E_dx2_prev[2] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[2]  +  (1-rho) * dL_dR**2
@@ -201,6 +213,8 @@ class Verb:
             if self.stop_early():
                 # print 'stopped at : {}'.format(e)
                 break
+            elif e % (epochs / 10) == 0:
+                print 'epoch: {}   |   L: {}'.format(e, self.prev_loss)
 
         self.P = self.min_params['P']
         self.Q = self.min_params['Q']
