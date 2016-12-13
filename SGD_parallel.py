@@ -115,6 +115,29 @@ def train_trials_grid(params, grid_params, parallel=False):
 
 
 
+def L_combined(verb, train_data, test_ratio):
+    L_test  = verb.L(*verb.test_data)  *  test_ratio
+    L_train = verb.L(*train_data)      *  (1 - test_ratio)
+
+
+def get_best_verbs(trained_verbs, all_data): #, test_ratio):
+    all_verbs = defaultdict(lambda: list())
+    for verbs in trained_verbs:
+        for v, verb in verbs.items():
+            all_verbs[v].append(verb)
+
+    for v, verbs in all_verbs.items():
+        ## L = lambda verb: L_combined(verb, train_data, test_ratio)
+        L = lambda verb: verb.L(*all_data)
+        all_verbs[v] = sorted(verbs, key=L)
+
+    return {v:verbs[0] for v,verbs in all_verbs.items()}
+
+
+
+
+
+
 def verb_fun(P):
     return train_verbs(test_to_params(P)), par2tuple(P)
 
@@ -143,11 +166,13 @@ def train_trials_grid_parallel(params, grid_params):
             best_acc_gs = save_acc(i, verbs, P, best_acc_gs, P['gs_data'], dset='GS')
             best_acc_ks = save_acc(i, verbs, P, best_acc_ks, P['ks_data'], dset='KS')
 
+        # -------------------------------------------
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), 
                           ('id', i) ]  +  [(k,v) for k,v in P.items() if k not in IGNORE]  ))
         pd.DataFrame(rows).to_csv(params['out_dir'] + '/grid_accuracy.csv')
         print '\n~~~~~ Grid iteration: {}/{}  time: {}    best GS: {}   best KS: {}\n\t{}'.format(i, len(iter_)+1, t2-t1, best_acc_gs, best_acc_ks, list(grid_iter))
+
 
 
 
@@ -186,12 +211,24 @@ def train_trials_grid_parallel2(params, grid_params):
 
     rows = []
     for i, (par, trial_verbs) in enumerate(verb_bins.items()):
-        best_acc_gs = 0.0
-        best_acc_ks = 0.0
+        ##best_acc_gs = 0.0
+        ##best_acc_ks = 0.0
+        ##
+        ##for j, verbs in enumerate(trial_verbs):
+        ##    best_acc_gs = save_acc(i, verbs, params, best_acc_gs, params['gs_data'], dset='GS')
+        ##    best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
 
-        for j, verbs in enumerate(trial_verbs):
-            best_acc_gs = save_acc(i, verbs, params, best_acc_gs, params['gs_data'], dset='GS')
-            best_acc_ks = save_acc(i, verbs, params, best_acc_ks, params['ks_data'], dset='KS')
+
+        # ----------------------------------------------------------------------------------------
+        # print '\n\n\n~~~~ best individual verbs ~~~~'
+        
+        all_data = format_data(params['w2v_nn'], params['w2v_svo_full'])
+        best_verbs = get_best_verbs(parfor, all_data)
+        
+        best_acc_gs = save_acc(best_verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=P['verbose'])[0]
+        best_acc_ks = save_acc(best_verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
+        
+        # ----------------------------------------------------------------------------------------
 
         # Append row with metadata and accuracy
         rows.append(dict([('accuracy_GS', best_acc_gs), ('accuracy_KS', best_acc_ks), ('id', i)] + list(par)))
@@ -424,6 +461,10 @@ if __name__ == '__main__':
         'ck'            : 0,
         'n_stop'        : 0.1,
         'stop_t'        : 1e-9,
+        'norm'          : 'L1',
+        'lamb_P'        : 0,
+        'lamb_Q'        : 1e-2,
+        'lamb_R'        : 1e-2,
     }
 
     dir_n = sys.argv[1]
