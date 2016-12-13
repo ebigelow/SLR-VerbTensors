@@ -8,9 +8,9 @@ class Verb:
 
     def __init__(self, test_data=None, stop_t=0.01, rank=50, svec=100, nvec=100, 
                  lamb_P=1e-3, lamb_Q=1e-1, lamb_R=1e-1, init_noise=0.1, init_restarts=1):
-        self.lamb = (lamb_P, lamb_Q, lamb_R) 
         self.test_data, self.stop_t = (test_data, stop_t)
         self.rank, self.svec, self.nvec = (rank, svec, nvec)
+        self.lamb = {'P': lamb_P, 'Q': lamb_Q, 'R': lamb_R}
         self.init_weights(init_noise, init_restarts)
 
     def init_weights(self, init_noise, init_restarts=1):
@@ -158,7 +158,7 @@ class Verb:
         if norm is None:
             prox = lambda a, lamb: a
         elif norm == 'L1':
-            prox = lambda a, lamb: np.sgn(a) * np.maximum(0, abs(a) - lamb)
+            prox = lambda a, lamb: np.sign(a) * np.maximum(0, abs(a) - lamb)
         elif norm == 'L2':
             prox = lambda a, lamb: np.maximum(0, 1 - lamb / norm(a, 2))
 
@@ -179,7 +179,7 @@ class Verb:
 
                 if e % 3 == 0:
                     g_ = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
-                    g = prox(g_)
+                    g = prox(g_, self.lamb['P'])
                     E_g2  = rho * E_g2_prev[0]  +  (1-rho) * g**2
                     dL_dP = -g * np.sqrt(E_dx2_prev[0] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[0]  +  (1-rho) * dL_dP**2
@@ -190,7 +190,7 @@ class Verb:
 
                 elif e % 3 == 1:
                     g_ = ( Ro * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(s.T)
-                    g = prox(g_)
+                    g = prox(g_, self.lamb['Q'])
                     E_g2  = rho * E_g2_prev[1]  +  (1-rho) * g**2
                     dL_dQ = -g * np.sqrt(E_dx2_prev[1] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[1]  +  (1-rho) * dL_dQ**2
@@ -201,7 +201,7 @@ class Verb:
 
                 elif e % 3 == 2:
                     g_ = ( Qs * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(o.T)
-                    g = prox(g_)
+                    g = prox(g_, self.lamb['R'])
                     E_g2  = rho * E_g2_prev[2]  +  (1-rho) * g**2
                     dL_dR = -g * np.sqrt(E_dx2_prev[2] + eps) / np.sqrt(E_g2 + eps)
                     E_dx2 = rho * E_dx2_prev[2]  +  (1-rho) * dL_dR**2
@@ -213,8 +213,8 @@ class Verb:
             if self.stop_early():
                 # print 'stopped at : {}'.format(e)
                 break
-            elif e % (epochs / 10) == 0:
-                print 'epoch: {}   |   L: {}'.format(e, self.prev_loss)
+            # elif e % (epochs / 10) == 0:
+            #     print 'epoch: {}   |   L: {}'.format(e, self.prev_loss)
 
         self.P = self.min_params['P']
         self.Q = self.min_params['Q']

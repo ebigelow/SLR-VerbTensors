@@ -59,11 +59,33 @@ def train_verbs(params):
 
 
 
+def L_combined(verb, train_data, test_ratio):
+    L_test  = verb.L(*verb.test_data)  *  test_ratio
+    L_train = verb.L(*train_data)      *  (1 - test_ratio)
+
+
+def get_best_verbs(trained_verbs, train_data, test_ratio):
+    all_verbs = defaultdict(lambda: list())
+    for verbs in trained_verbs:
+        for v, verb in verbs.items():
+            all_verbs[v].append(verb)
+
+    for v, verbs in all_verbs.items():
+        L = lambda verb: L_combined(verb, train_data, test_ratio)
+        all_verbs[v] = sorted(verbs, key=L)
+
+    return {v:verbs[0] for v,verbs in all_verbs.items()}
 
 
 
 
-def train_trials(params, parallel=False):
+
+
+
+
+
+
+def train_trials(params):
     """
     Train all verbs `n_trials` individual times.
 
@@ -72,12 +94,12 @@ def train_trials(params, parallel=False):
     best_acc_ks = 0.0
 
     loop = trange if params['verbose'] else range
+    trained_verbs = []
 
     for k in loop(params['n_trials']):
         P = test_to_params(params)
 
         # Train verbs
-        #verbs = train_verbs_parallel(P) if parallel else train_verbs(P, verbose=verbose)
         verbs = train_verbs(P)
 
         # Update saved weights for best-scoring parameters
@@ -91,8 +113,14 @@ def train_trials(params, parallel=False):
             save_verbs(verbs, P['save_file'] + '-KS.npy')
             best_acc_ks = curr_acc_ks
 
+        trained_verbs.append(verbs)
+
     # Save metadata for this run
     save_meta(params, P['save_file'] + '_meta.npy')
+
+    print '\n\n\n~~~~ best individual verbs ~~~~'
+    curr_acc_gs = test_verbs(verbs, P['w2v_nn'], P['gs_data'], dset='GS', verbose=P['verbose'])[0]
+    curr_acc_ks = test_verbs(verbs, P['w2v_nn'], P['ks_data'], dset='KS', verbose=P['verbose'])[0]
 
 
 
@@ -104,24 +132,24 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/test-3',
+        'save_file'     : 'data/sparse-1',
         'verbose'       : True,
         'train'         : True,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 5,
-        'learning_rate' : 1.0,
+        'n_trials'      : 20,
+        'learning_rate' : 2.0,
         'init_noise'    : 0.1,
         'optimizer'     : 'ADAD',  # | 'SGD',
-        'rho'           : 0.9,
+        'rho'           : 0.95,
         'eps'           : 1e-6,
         'cg'            : 0,      # set to 0 for full data,
         'ck'            : 0,     # set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
-        'stop_t'        : 0,
+        'stop_t'        : 1e-6,
         'norm'          : 'L1',
-        'lamb_P'        : 0.0,
+        'lamb_P'        : 0,
         'lamb_Q'        : 1e-2,
         'lamb_R'        : 1e-2,
     }
