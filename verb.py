@@ -16,10 +16,12 @@ class Verb:
     def init_weights(self, init_noise, init_restarts=1):
         best_L = float('inf')
         best_params = (None,None,None)
+
         for i in range(init_restarts):
             self.P = init_noise * np.random.rand(self.rank, self.svec)
             self.Q = init_noise * np.random.rand(self.rank, self.svec)
             self.R = init_noise * np.random.rand(self.rank, self.svec)
+
             L = self.L(*self.test_data)
             if i==0 or L < best_L:
                 best_L = L
@@ -92,19 +94,22 @@ class Verb:
 
                 if e % 3 == 0:
                     dL_dP = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
-                    self.P -= lr * dL_dP
+                    self.P -= (lr / np.sqrt(e+1)) * dL_dP
 
                 elif e % 3 == 1:
                     dL_dQ = ( Ro * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(s.T)
-                    self.Q -= lr * dL_dQ 
+                    self.Q -= (lr / np.sqrt(e+1)) * dL_dQ 
 
                 elif e % 3 == 2:
                     dL_dR = ( Qs * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(o.T)
-                    self.R -= lr * dL_dR
+                    self.R -= (lr / np.sqrt(e+1)) * dL_dR
 
             if self.stop_early():
                 # print 'stopped at : {}'.format(e)
                 return
+            else:
+                with open('./data/SGD_loss.csv', 'a') as f:
+                    f.write('{},{}\n'.format(e, self.prev_loss))
 
             # if e % (epochs / 8) == 0:
             #     L = self.L(sentences, subjects, objects)
@@ -213,8 +218,9 @@ class Verb:
             if self.stop_early():
                 # print 'stopped at : {}'.format(e)
                 break
-            # elif e % (epochs / 10) == 0:
-            #     print 'epoch: {}   |   L: {}'.format(e, self.prev_loss)
+            # else:
+            #     with open('./data/ADAD_loss.csv', 'a') as f:
+            #         f.write('{},{}\n'.format(e, self.prev_loss))
 
         self.P = self.min_params['P']
         self.Q = self.min_params['Q']
