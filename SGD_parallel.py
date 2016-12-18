@@ -322,10 +322,15 @@ def train_trials_grid_parallel4(params, grid_params):
     # ----------------------------------------------------------------------------------------
     # Run experiment
 
+    # Prepare list of parameters to send to parallel process
     map_P = [dict(i) for idx, grid in iter_ for i in [params.items() + list(grid) + [('grid_idx', idx)]] * n_trials]
     for mpi_idx, P in enumerate(map_P):
         P['mpi_idx'] = mpi_idx
         P['temp_file'] = P['temp_file'].format(P['grid_idx'], mpi_idx)
+
+    # Save all parameters so if it cuts out early, we can still use the temp files
+    params_file = params['out_dir'].format('grid-temps')
+    np.save(params_file, [dict(par2tuple(P)) for P in map_P])
 
     t1 = time.time()
     parfor = MPI_map(verb_fun2, map_P, progress_bar=False)
@@ -428,12 +433,16 @@ if __name__ == '__main__':
     # Grid-search parameters
 
     grid_params = {
-        'rank':     [1, 5, 10, 20, 30, 40, 50, 100],    
+        'norm':     ['L1', 'L2'],
+        'lamb_P':   [1., 1e-1, 1e-2],
+        'lamb_Q':   [1., 1e-1, 1e-2],
+        'lamb_R':   [1., 1e-1, 1e-2],
+        'rank':     [10, 20, 40],
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
-        'stop_t':   [0, 1e-6],
+        #'stop_t':   [0, 1e-6],
         #'learning_rate': [1.0, 2.0, 3.0],
-        'batch_size': [20, 50],
+        #'batch_size': [20, 50],
         # 'eps':      [1e-5, 1e-6, 1e-7],
         # 'lamb':     [0.1, 0.2, ...]       # Regularization parameter, when we have that...
     }
@@ -445,7 +454,7 @@ if __name__ == '__main__':
 
     params = {   
         'out_dir'       : 'data/out/run-{}',
-        'temp_file'     : 'data/temp/temp-{}-{}.npy',
+        'temp_dir'      : 'data/temp-{}',
         'verbose'       : False,
         'rank'          : 20,
         'batch_size'    : 20,
@@ -467,12 +476,16 @@ if __name__ == '__main__':
         'lamb_R'        : 1e-2,
     }
 
+    # Slurm job number as command-line arg
     dir_n = sys.argv[1]
+
     params['out_dir'] = params['out_dir'].format(dir_n)
     make_path(params['out_dir'])
 
-    temp_dir = '/'.join(params['temp_file'].split('/')[:-1])
-    make_path(temp_dir)
+
+    params['temp_dir'] = params['temp_dir'].format(dir_n) 
+    params['temp_file'] = params['temp_dir'] + '/{}-{}.npy'
+    make_path(params['temp_dir'])
 
 
 
@@ -508,5 +521,5 @@ if __name__ == '__main__':
     train_trials_grid_parallel4(params, grid_params)
 
     print '\nTesting done, clearing temp directory'
-    os.system('rm ' + temp_dir + '/*')
+    os.system('rm -r ' + params['temp_dir'])
 
