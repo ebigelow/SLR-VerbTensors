@@ -1,5 +1,5 @@
 import numpy as np
-from numpy.linalg import norm
+from numpy.linalg import norm as norm_
 from collections import defaultdict
 from tqdm import tqdm, trange
 
@@ -160,7 +160,7 @@ class Verb:
         elif norm == 'L1':
             prox = lambda a, lamb: np.sign(a) * np.maximum(0, abs(a) - lamb)
         elif norm == 'L2':
-            prox = lambda a, lamb: np.maximum(0, 1 - lamb / norm(a, 2))
+            prox = lambda a, lamb: np.maximum(0, 1 - lamb / norm_(a, 2))
 
         loop = trange(epochs) if verbose else range(epochs)
         for e in loop:
