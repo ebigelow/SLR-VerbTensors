@@ -305,8 +305,7 @@ def verb_fun2(params):
     P = test_to_params(params)
     verbs = train_verbs(P)
     save_verbs(verbs, P['temp_file'])
-    # This is to remove( non-params from P
-    return dict(par2tuple(P))
+    return dict(par2tuple(P))               # remove non-params from P
 
 
 def train_trials_grid_parallel4(params, grid_params):
@@ -433,11 +432,12 @@ if __name__ == '__main__':
     # Grid-search parameters
 
     grid_params = {
-        'norm':     ['L1', 'L2'],
+        'norm':     ['L1'],
         'lamb_P':   [1., 1e-1, 1e-2],
         'lamb_Q':   [1., 1e-1, 1e-2],
         'lamb_R':   [1., 1e-1, 1e-2],
-        'rank':     [10, 20, 40],
+        'rank':     [10, 20, 30, 40, 50],
+        'data_ratio': [0.2, 0.4, 0.6, 0.8, 1.0],
         #'rho':      [0.9, 0.95, 0.99],
         #'init_restarts': [1, 1000],
         #'stop_t':   [0, 1e-6],
@@ -469,8 +469,9 @@ if __name__ == '__main__':
         'cg'            : 0,
         'ck'            : 0,
         'n_stop'        : 0.1,
-        'stop_t'        : 1e-9,
-        'norm'          : 'L1',
+        'data_ratio'    : 1.0,
+        'stop_t'        : 1e-7,
+        'norm'          : None,
         'lamb_P'        : 0,
         'lamb_Q'        : 1e-2,
         'lamb_R'        : 1e-2,

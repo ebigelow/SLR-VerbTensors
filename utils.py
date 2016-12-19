@@ -96,18 +96,34 @@ def parameterize(f, params):
 
 
 
+def ablate_data(w2v_svo, data_ratio):
+    for v, s_o in w2v_svo.items():
+        full_keys = s_o.keys()
+        N = len(full_keys)
+        keep = int(N * data_ratio)
+
+        keep_keys  = [full_keys[i] for i in np.random.choice(range(N), keep, replace=False)]
+        w2v_svo[v] = {k:s_o[k] for k in keep_keys}
+
+    return w2v_svo
+
+
+
+
+
 def test_to_params(params):
     """ 
     Randomly select 10% of triplets as test data; we do this for each trial.
 
     """
     P = params.copy()
-    w2v_svo_full, n_stop = (P['w2v_svo_full'], P['n_stop'])
-    w2v_svo, w2v_svo_test = split_test(w2v_svo_full, n_stop=n_stop)
-    test_data = {k:format_data(P['w2v_nn'], s_o) for k,s_o in w2v_svo_test.items()}
+
+    w2v_svo, w2v_svo_test = split_test(P['w2v_svo_full'], n_stop=P['n_stop'])
+    w2v_svo = ablate_data(w2v_svo, P['data_ratio'])
 
     P['w2v_svo']   = w2v_svo
-    P['test_data'] = test_data
+    P['test_data'] = {k:format_data(P['w2v_nn'], s_o) for k,s_o in w2v_svo_test.items()}
+
     del P['w2v_svo_full']
     return P
 
