@@ -1,4 +1,4 @@
-# Learning Low Rank Tensor Representations of Verbs
+# Learning Sparse Low Rank Tensor Representations of Transitive Verbs
 
 This is a recreation and modification of
 
@@ -7,5 +7,5 @@ Fried, D., Polajnar, T., & Clark, S. (2015). Low-rank tensors for verbs in compo
 Chicago
 ```
 
-
+Full report will be available soon.
 
