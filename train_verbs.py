@@ -132,26 +132,27 @@ if __name__ == '__main__':
     # Parameters
 
     params = {   
-        'save_file'     : 'data/sparse-1',
+        'save_file'     : 'data/nonsparse',
         'verbose'       : True,
         'train'         : True,
         'rank'          : 20,
         'batch_size'    : 20,
         'epochs'        : 500,
-        'n_trials'      : 20,
-        'learning_rate' : 2.0,
+        'n_trials'      : 10,
+        'learning_rate' : 1.0,
         'init_noise'    : 0.1,
-        'optimizer'     : 'ADAD',  # | 'SGD',
+        'optimizer'     : 'ADAD',
         'rho'           : 0.95,
         'eps'           : 1e-6,
         'cg'            : 0,      # set to 0 for full data,
         'ck'            : 0,     # set to -1 for full data  (minus 1 point),
         'n_stop'        : 0.1,
+        'data_ratio'    : 0.1,
         'stop_t'        : 1e-6,
         'norm'          : 'L1',
-        'lamb_P'        : 0,
-        'lamb_Q'        : 1e-2,
-        'lamb_R'        : 1e-2,
+        'lamb_P'        : 1e-2,
+        'lamb_Q'        : 1e-0,
+        'lamb_R'        : 1e-1,
     }
 
 

@@ -157,8 +157,8 @@ class Verb:
         lr = learning_rate / Mv
         batches = Mv / batch_size
 
-        E_g2_prev  = [0.0, 0.0, 0.0]
-        E_dx2_prev = [0.0, 0.0, 0.0]
+        E_g2_prev  = {'P': 0.0, 'Q': 0.0, 'R': 0.0}
+        E_dx2_prev = {'P': 0.0, 'Q': 0.0, 'R': 0.0}
 
         if norm is None:
             prox = lambda a, lamb: a
@@ -182,38 +182,41 @@ class Verb:
                 Ro = R.dot(o)
                 Qs_Ro = Qs * Ro
 
+                # Update P
                 if e % 3 == 0:
                     g_ = Qs_Ro.dot(Qs_Ro.T).dot(P)  -  t.dot(Qs_Ro.T).T
                     g = prox(g_, self.lamb['P'])
-                    E_g2  = rho * E_g2_prev[0]  +  (1-rho) * g**2
-                    dL_dP = -g * np.sqrt(E_dx2_prev[0] + eps) / np.sqrt(E_g2 + eps)
-                    E_dx2 = rho * E_dx2_prev[0]  +  (1-rho) * dL_dP**2
+                    E_g2  = rho * E_g2_prev['P']  +  (1-rho) * g**2
+                    dL_dP = -g * np.sqrt(E_dx2_prev['P'] + eps) / np.sqrt(E_g2 + eps)
+                    E_dx2 = rho * E_dx2_prev['P']  +  (1-rho) * dL_dP**2
 
                     self.P += lr * dL_dP
-                    E_g2_prev[0] = E_g2
-                    E_dx2_prev[0] = E_dx2
+                    E_g2_prev['P'] = E_g2
+                    E_dx2_prev['P'] = E_dx2
 
+                # Update Q
                 elif e % 3 == 1:
                     g_ = ( Ro * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(s.T)
                     g = prox(g_, self.lamb['Q'])
-                    E_g2  = rho * E_g2_prev[1]  +  (1-rho) * g**2
-                    dL_dQ = -g * np.sqrt(E_dx2_prev[1] + eps) / np.sqrt(E_g2 + eps)
-                    E_dx2 = rho * E_dx2_prev[1]  +  (1-rho) * dL_dQ**2
+                    E_g2  = rho * E_g2_prev['Q']  +  (1-rho) * g**2
+                    dL_dQ = -g * np.sqrt(E_dx2_prev['Q'] + eps) / np.sqrt(E_g2 + eps)
+                    E_dx2 = rho * E_dx2_prev['Q']  +  (1-rho) * dL_dQ**2
 
                     self.Q += lr * dL_dQ
-                    E_g2_prev[1] = E_g2
-                    E_dx2_prev[1] = E_dx2
+                    E_g2_prev['Q'] = E_g2
+                    E_dx2_prev['Q'] = E_dx2
 
+                # Update R
                 elif e % 3 == 2:
                     g_ = ( Qs * (P.dot(P.T).dot(Qs_Ro)  -  P.dot(t)) ).dot(o.T)
                     g = prox(g_, self.lamb['R'])
-                    E_g2  = rho * E_g2_prev[2]  +  (1-rho) * g**2
+                    E_g2  = rho * E_g2_prev['R']  +  (1-rho) * g**2
                     dL_dR = -g * np.sqrt(E_dx2_prev[2] + eps) / np.sqrt(E_g2 + eps)
-                    E_dx2 = rho * E_dx2_prev[2]  +  (1-rho) * dL_dR**2
+                    E_dx2 = rho * E_dx2_prev['R']  +  (1-rho) * dL_dR**2
 
                     self.R += lr * dL_dR
-                    E_g2_prev[2] = E_g2
-                    E_dx2_prev[2] = E_dx2
+                    E_g2_prev['R'] = E_g2
+                    E_dx2_prev['R'] = E_dx2
 
             if self.stop_early():
                 # print 'stopped at : {}'.format(e)
