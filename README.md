@@ -13,27 +13,31 @@ Chicago
 
 Files
 -----
-* `skicka_upload.sh`
 
 shell script to quickly upload output logs and saved weights to Google Drive using Skicka
+
+* `skicka_upload.sh`
+
+scripts to run `train_parallel.py` on cores using SLURM job scheduler
 
 * `slurm_run.sbatch`
 * `slurm_test.sbatch`
 
-scripts to run `train_parallel.py` on cores using SLURM job scheduler
+python scripts to train verb tensors with and without OpenMPI parallelization, respectively
 
 * `train_parallel.py`
 * `train_verbs.py`
 
-python scripts to train verb tensors with and without OpenMPI parallelization, respectively
-
-* `utils.py`
 
 simple utility functions used in `verb.py` and training scripts
 
-* `verb.py`
+* `utils.py`
+
 
 contains `Verb` class, includes implementations of SGD and ADADELTA to train verb tensors
+
+* `verb.py`
+
 
 ---
 
